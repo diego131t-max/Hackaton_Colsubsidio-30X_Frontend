@@ -1,0 +1,2 @@
+# Datos del backend (catálogos, tablas de apoyo del motor de reglas).
+# TODO: definir qué archivos de datos viven aquí y cuáles se ignoran (.env, dumps).
