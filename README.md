@@ -40,10 +40,43 @@ Está validado con Pydantic en [`backend/models/schemas.py`](backend/models/sche
 y documentado en [`docs/contrato-de-datos.md`](docs/contrato-de-datos.md).
 **Regla de oro:** nadie agrega un campo al contrato sin avisar al grupo primero.
 
-## Puesta en marcha (pendiente)
+## Flujo end-to-end
 
-- **Backend:** Python + Pydantic (framework recomendado: FastAPI). `TODO`: `requirements.txt` / entorno.
+```
+Bowl (SenalBowl)
+  → POST /leads                      (responde 202 rápido, encola el pipeline)
+  → rules_engine (H1–H10)            (pieza existente, no se toca)
+  → clustering_client.predecir_cluster  → cluster_id + proyectos_recomendados
+  → handoff_card.iniciar_ficha       (ficha inicial, aún sin Dapta)
+  → dapta_client.disparar_llamada    (Dapta llama por fuera de nuestro sistema)
+  ── Dapta califica por voz/WhatsApp ──
+  → POST /webhooks/dapta/resultado   (ResultadoCalificacionDapta)
+  → handoff_card.aplicar_resultado_dapta → FichaTraspaso final (campos sensibles)
+```
+
+## Puertos de integración (URLs a configurar externamente)
+
+| Puerto | Dirección | Quién lo configura | Dónde |
+|---|---|---|---|
+| **Webhook de Flow Studio de Dapta** | Saliente (backend → Dapta) | **Juan** | Variable `DAPTA_FLOW_STUDIO_WEBHOOK_URL` (ver `.env.example`), usada en [`dapta_client.py`](backend/integrations/dapta_client.py). |
+| **Webhook de resultado** | Entrante (Dapta → backend) | **Juan** | Endpoint `POST /webhooks/dapta/resultado` de este backend. La URL pública de este endpoint se pega en el "webhook de finalización" del agente de voz en el dashboard de Dapta. |
+
+> **Pendiente de seguridad (documentado, no implementado en esta pasada):** el
+> webhook de resultado hoy confía en el emisor. Antes de producción hay que
+> verificar autenticidad (HMAC / secreto compartido `DAPTA_WEBHOOK_SECRET`),
+> restringir CORS al frontend y añadir rate limiting a `/leads`. Ver los TODO en
+> [`main.py`](backend/main.py) y `.env.example`.
+
+## Puesta en marcha
+
+```bash
+# Backend
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload        # docs interactivas en /docs
+```
+
+- **Backend:** FastAPI + Pydantic. Endpoints y contratos ya modelados; la lógica interna de cada pieza es stub/mock.
 - **Frontend:** Node (recomendado Vite + React). `TODO`: dependencias reales en `frontend/package.json`.
-- **Clustering:** Python (scikit-learn). `TODO`: pipeline en `clustering/src/entrenar.py`.
+- **Clustering:** Python (scikit-learn). `TODO`: modelo real en `clustering/src/` (el backend ya lo consume vía `clustering_client.py`).
 
 Ver los `TODO` concretos dentro de cada archivo stub.

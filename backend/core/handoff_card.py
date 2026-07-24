@@ -3,43 +3,72 @@ H9 — Ficha de traspaso al asesor humano.
 
 Pieza del sistema: BACKEND (core / motor de reglas).
 
-Combina motor de reglas + recomendador + clustering + resultado de Dapta para
-armar la FichaTraspaso (schemas.py) que recibe el asesor humano (pieza 5):
-probabilidad de cierre, proyecto recomendado, beneficios y resumen.
+Combina motor de reglas + clustering + resultado de Dapta para armar la
+FichaTraspaso (schemas.py) que recibe el asesor humano (pieza 5).
 
-IMPORTANTE: la lógica de `probabilidad_cierre` definida aquí es la MISMA que
-usa Dapta para decidir cuándo un lead está "caliente". No debe existir una
-segunda definición en dapta_client.py — ambos consumen esta.
+Flujo en dos tiempos:
+  1. `iniciar_ficha(...)`   -> al recibir el bowl + clustering (aún sin Dapta).
+  2. `aplicar_resultado_dapta(...)` -> cuando llega el webhook de Dapta, se
+     completan calificación y campos SENSIBLES (ahorros, herencia, primas), que
+     nunca existen antes de este punto.
 
-TODOs:
-  - [ ] Definir el cálculo de probabilidad_cierre (features + umbral).
-  - [ ] Mapear beneficios aplicables según afiliación y reglas.
-  - [ ] Generar el resumen de calificación legible para el asesor.
+IMPORTANTE: la lógica de calificación/probabilidad definida aquí es la fuente
+de verdad ÚNICA, compartida con Dapta. No debe existir una segunda definición
+en dapta_client.py.
 """
 
 from __future__ import annotations
 
-from backend.models.schemas import FichaTraspaso, PerfilLead
+from uuid import UUID
+
+from backend.models.schemas import (
+    FichaTraspaso,
+    ResultadoCalificacionDapta,
+    ResultadoClustering,
+    SenalBowl,
+)
 
 
-def calcular_probabilidad_cierre(lead: PerfilLead, resultado_reglas: dict) -> float:
-    """
-    Probabilidad [0, 1] de cierre. Fuente de verdad única, compartida con Dapta.
-
-    TODO: definir features y umbral junto con el equipo.
-    """
-    raise NotImplementedError("calcular_probabilidad_cierre: pendiente.")
-
-
-def construir_ficha(
-    lead: PerfilLead,
-    resultado_reglas: dict,
-    proyectos_recomendados: list[str],
-    cluster: str | None = None,
+def iniciar_ficha(
+    lead_id: UUID,
+    senal: SenalBowl,
+    clustering: ResultadoClustering,
 ) -> FichaTraspaso:
     """
-    Ensambla la FichaTraspaso final para el asesor humano.
+    Arma la ficha inicial con lo que se sabe ANTES de la llamada de Dapta.
 
-    TODO: completar con probabilidad, beneficios y resumen reales.
+    TODO:
+      - [ ] Poblar `beneficios_aplicables` según afiliación + reglas (rules_engine)
+            + cruce de subsidio (external_mocks).
     """
-    raise NotImplementedError("construir_ficha: ensamblaje pendiente.")
+    return FichaTraspaso(
+        lead_id=lead_id,
+        nombre_completo=f"{senal.nombre} {senal.apellido}",
+        telefono_movil=senal.telefono_movil,
+        cluster_id=clustering.cluster_id,
+        proyectos_recomendados=clustering.proyectos_recomendados,
+        beneficios_aplicables=[],  # TODO
+        resumen="Ficha iniciada; pendiente resultado de calificación de Dapta.",
+    )
+
+
+def aplicar_resultado_dapta(
+    ficha: FichaTraspaso,
+    resultado: ResultadoCalificacionDapta,
+) -> FichaTraspaso:
+    """
+    Completa la ficha con el resultado de Dapta. Aquí — y solo aquí — entran los
+    campos SENSIBLES (ahorros, herencia, primas).
+
+    TODO:
+      - [ ] Derivar/validar la calificación final si combinamos reglas + Dapta
+            (misma lógica que usa Dapta para "caliente", no inventar otra).
+    """
+    actualizada = ficha.model_copy(
+        update={
+            "calificacion_lead": resultado.calificacion_lead,
+            "resultado_dapta": resultado,
+            "resumen": resultado.resumen_llamada or ficha.resumen,
+        }
+    )
+    return actualizada

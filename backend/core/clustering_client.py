@@ -1,30 +1,61 @@
 """
-Cliente de clustering — NUEVO.
+Puerto de clustering — backend <-> modelo de Santiago DS.
 
 Pieza del sistema: BACKEND (core) <-> CLUSTERING (Santiago DS).
 
-Puente entre el backend de reglas y el modelo de clustering de Santiago. El
-modelo corre offline y expone `predecir_cluster` (clustering/src/predecir_cluster.py);
-este cliente lo importa/llama y traduce la salida a algo que el core consuma
-(personalización de recomendaciones).
+Define el PUERTO (interfaz) que el backend usa para agrupar/personalizar, y una
+implementación MOCK determinística para que el pipeline end-to-end corra ya.
+Santiago DS reemplaza el cuerpo por el modelo real; la firma y los tipos NO
+deben cambiar sin avisar (el backend depende de ellos).
 
-TODOs:
-  - [ ] Acordar con Santiago la firma exacta de predecir_cluster (features de
-        entrada = subconjunto del contrato de datos).
-  - [ ] Decidir integración: import directo del .pkl vs. microservicio.
-  - [ ] Cargar el modelo una sola vez (no en cada request).
-  - [ ] Manejar el caso "modelo no disponible" con un fallback seguro.
+Contrato:
+  predecir_cluster(señal: SenalBowl) -> ResultadoClustering
 """
 
 from __future__ import annotations
 
-from backend.models.schemas import PerfilLead
+from typing import Protocol
+
+from backend.models.schemas import ResultadoClustering, SenalBowl
 
 
-def predecir_cluster(lead: PerfilLead) -> str | None:
+# --------------------------------------------------------------------------- #
+# Puerto (interfaz) — permite intercambiar mock <-> modelo real sin tocar
+# el código que lo llama (adaptabilidad / hexagonal).
+# --------------------------------------------------------------------------- #
+class ClusteringPort(Protocol):
+    async def predecir(self, senal: SenalBowl) -> ResultadoClustering: ...
+
+
+# --------------------------------------------------------------------------- #
+# Adaptador MOCK — determinístico, para desarrollo y demo.
+# --------------------------------------------------------------------------- #
+class MockClustering:
     """
-    Devuelve el cluster asignado al lead (o None si el modelo no está listo).
+    Mock determinístico basado en tipo_vivienda + zona_interes.
 
-    TODO: llamar al modelo real de clustering/src/predecir_cluster.py.
+    TODO (Santiago DS): reemplazar por la carga del modelo real
+    (clustering/modelos/kmeans_v1.pkl vía clustering/src/predecir_cluster.py).
+    Mantener EXACTAMENTE la firma `predecir(senal) -> ResultadoClustering`.
     """
-    raise NotImplementedError("predecir_cluster: integración con DS pendiente.")
+
+    async def predecir(self, senal: SenalBowl) -> ResultadoClustering:
+        cluster_id = f"{senal.tipo_vivienda}::{senal.zona_interes.strip().lower()}"
+        # Recomendaciones mock según tipo de vivienda (placeholder).
+        if senal.tipo_vivienda == "vis":
+            proyectos = ["Ciudadela VIS Norte", "Torres del Parque VIS"]
+        else:
+            proyectos = ["Nuva Park", "Reserva del Bosque"]
+        return ResultadoClustering(
+            cluster_id=cluster_id, proyectos_recomendados=proyectos
+        )
+
+
+# Instancia por defecto que usa el backend. Para cambiar de adaptador, se
+# sustituye esta referencia (inyección de dependencia sencilla).
+_clustering: ClusteringPort = MockClustering()
+
+
+async def predecir_cluster(senal: SenalBowl) -> ResultadoClustering:
+    """Punto de entrada estable que consume `main.py`. Delegado al puerto."""
+    return await _clustering.predecir(senal)
