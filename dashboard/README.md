@@ -13,11 +13,27 @@ plugins y el detalle de cada lead.
 ```bash
 cd dashboard
 npm install
-npm run dev        # http://localhost:5174
+cp .env.example .env   # y rellenar con las credenciales de Supabase
+npm run dev            # http://localhost:5174
 ```
 
-Funciona **sin backend ni Supabase**: usa un `MockDataSource` que simula leads
-avanzando por el pipeline.
+**Fuente de datos automática:**
+- Si `.env` tiene `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` → usa **Supabase real**
+  (tabla `reto_vivienda_leads`, vía Realtime). El pill del header dice "Supabase".
+- Si no → cae al **`MockDataSource`** (datos simulados), para demo sin base. Pill: "simulado".
+
+### Ver el flujo REAL moverse
+
+Con Supabase configurado, el dashboard muestra las filas reales, pero no se mueven
+solas hasta que algo (el backend/bowl) las actualice. Para verlo en vivo hay un
+**simulador** que escribe en la base (stand-in del backend):
+
+```bash
+node scripts/simular.mjs          # inserta y avanza 1 lead (UPDATEs reales)
+node scripts/simular.mjs --loop   # sigue inyectando leads
+```
+
+Cada UPDATE dispara Realtime y el dashboard se anima con **datos reales**, no simulados.
 
 ## Patrón de datos (adaptador) — lo importante
 
@@ -26,12 +42,11 @@ El dashboard nunca sabe de dónde vienen los datos: habla contra la interfaz
 
 | Implementación | Estado | Archivo |
 |---|---|---|
-| `MockDataSource` | **Activo** (demo) | [src/data/MockDataSource.ts](src/data/MockDataSource.ts) |
-| `SupabaseDataSource` | Stub con TODOs | [src/data/SupabaseDataSource.ts](src/data/SupabaseDataSource.ts) |
+| `SupabaseDataSource` | **Activo** si hay `.env` (datos reales + Realtime) | [src/data/SupabaseDataSource.ts](src/data/SupabaseDataSource.ts) |
+| `MockDataSource` | Fallback sin `.env` (demo simulada) | [src/data/MockDataSource.ts](src/data/MockDataSource.ts) |
 
-**Para pasar a Supabase mañana:** llenar `SupabaseDataSource` (URL, canal
-Realtime de la tabla `leads`, mapeo de filas) y cambiar **una línea** en
-[src/data/index.ts](src/data/index.ts). Ningún componente se toca.
+La selección es automática en [src/data/index.ts](src/data/index.ts) según haya
+credenciales o no. Ningún componente sabe de dónde vienen los datos.
 
 ## Estructura
 

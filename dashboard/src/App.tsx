@@ -12,7 +12,7 @@ import { SystemMap } from "./components/SystemMap";
 import { PluginsPanel } from "./components/PluginsPanel";
 import { ActivityLog, type EntradaLog } from "./components/ActivityLog";
 import { LeadDetail } from "./components/LeadDetail";
-import { dataSource } from "./data";
+import { dataSource, fuenteActiva } from "./data";
 import type { EstadoPlugin, Lead } from "./types";
 
 const MAX_LOG = 40;
@@ -85,9 +85,13 @@ export function App() {
             <div className="brand__sub">Colsubsidio × 30X · panel interno</div>
           </div>
         </div>
-        <span className="live-pill">
+        <span className="live-pill" title={
+          fuenteActiva === "supabase"
+            ? "Datos reales desde Supabase (Realtime)"
+            : "Datos simulados (sin Supabase configurado)"
+        }>
           <span className="live-dot" />
-          En vivo
+          {fuenteActiva === "supabase" ? "En vivo · Supabase" : "En vivo · simulado"}
         </span>
       </header>
 
