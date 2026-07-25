@@ -30,30 +30,50 @@ DAPTA_FLOW_STUDIO_WEBHOOK_URL: str | None = None
 
 
 async def disparar_llamada(
-    senal: SenalBowl, recomendaciones: ResultadoClustering
+    senal: SenalBowl,
+    recomendaciones: ResultadoClustering,
+    *,
+    urgencia: str | None = None,
+    cuota_estimada_mensual: float | None = None,
+    valor_estimado_vivienda: float | None = None,
+    subsidio_estimado: float | None = None,
+    proyecto_interes: str | None = None,
 ) -> dict[str, Any]:
     """
-    Arma el payload que espera el webhook de Flow Studio de Dapta e inicia la
-    llamada/WhatsApp.
+    Arma el payload que espera el webhook del flow `colsubsidio-vivienda-
+    perfilamiento-lead` (Nodo 1) e inicia la llamada de Manuela.
 
-    MAPEO contrato interno -> nombres que espera DAPTA (Flow Studio).
-    Usa los nombres de campo tal cual los pide Dapta, NO los nuestros:
+    El trigger de Dapti espera EXACTAMENTE estos 16 campos (mapeo abajo). Usa los
+    nombres tal cual los pide Dapta, NO los nuestros.
 
-        Dapta            <-  Nuestro contrato
-        ---------------------------------------------------------------
-        nombre           <-  f"{senal.nombre} {senal.apellido}"
-        telefono         <-  senal.telefono_movil
-        proyecto         <-  recomendaciones.proyectos_recomendados[0]  (top-1)
-        afiliado         <-  senal.afiliado
-        rango_ingreso    <-  senal.ingresos_hogar_rango
-        zona_interes     <-  senal.zona_interes
-        urgencia         <-  (derivada; TODO: definir señal de urgencia real)
+    Los tres cálculos financieros (cuota/valor/subsidio) y `urgencia` NO están en
+    SenalBowl: los produce el backend (rules_engine / bandas de precio) y se
+    inyectan por parámetro. Mientras esas piezas sean stub, llegan como None.
+
+        Dapta (16 campos)        <-  Origen
+        ----------------------------------------------------------------------
+        nombre                   <-  f"{senal.nombre} {senal.apellido}"
+        telefono                 <-  senal.telefono_movil
+        proyecto                 <-  proyecto_interes | top recomendado
+        afiliado                 <-  senal.afiliado
+        rango_ingreso            <-  senal.ingresos_hogar_rango
+        zona_interes             <-  senal.zona_interes
+        urgencia                 <-  parámetro (derivado por el backend)
+        edad                     <-  senal.edad
+        entorno_deseado          <-  senal.entorno_deseado
+        personas_a_cargo         <-  senal.personas_a_cargo
+        piso_preferido           <-  senal.piso_preferido
+        tipo_inmueble            <-  senal.tipo_inmueble
+        proyecto_recomendado     <-  recomendaciones.proyectos_recomendados[0]
+        cuota_estimada_mensual   <-  parámetro (rules_engine, regla 40%)
+        valor_estimado_vivienda  <-  parámetro (bandas de precio)
+        subsidio_estimado        <-  parámetro (rules_engine / external_mocks)
 
     TODO (Juan):
-      - [ ] Confirmar con Laura los nombres EXACTOS de las variables del template
-            de guion en Flow Studio y ajustar el mapeo de abajo.
-      - [ ] Reemplazar el retorno mock por el POST real a DAPTA_FLOW_STUDIO_WEBHOOK_URL.
-      - [ ] Definir de dónde sale `urgencia` (no está en SenalBowl v-final).
+      - [ ] Confirmar con Dapti los nombres EXACTOS de las variables del guion.
+      - [ ] Reemplazar el retorno mock por el POST real a DAPTA_FLOW_STUDIO_WEBHOOK_URL
+            (la URL nueva del flow v2 que dará Dapti).
+      - [ ] Cablear urgencia + los 3 cálculos financieros desde el orquestador.
       - [ ] Reintentos/timeout y manejo de error de la API de Dapta.
     """
     proyecto_top = (
@@ -65,15 +85,24 @@ async def disparar_llamada(
     payload_dapta: dict[str, Any] = {
         "nombre": f"{senal.nombre} {senal.apellido}",
         "telefono": senal.telefono_movil,
-        "proyecto": proyecto_top,
+        "proyecto": proyecto_interes or proyecto_top,
         "afiliado": senal.afiliado,
         "rango_ingreso": senal.ingresos_hogar_rango,
         "zona_interes": senal.zona_interes,
-        "urgencia": None,  # TODO(Juan): definir origen de urgencia
+        "urgencia": urgencia,
+        "edad": senal.edad,
+        "entorno_deseado": senal.entorno_deseado,
+        "personas_a_cargo": senal.personas_a_cargo,
+        "piso_preferido": senal.piso_preferido,
+        "tipo_inmueble": senal.tipo_inmueble,
+        "proyecto_recomendado": proyecto_top,
+        "cuota_estimada_mensual": cuota_estimada_mensual,
+        "valor_estimado_vivienda": valor_estimado_vivienda,
+        "subsidio_estimado": subsidio_estimado,
     }
 
     # --- MOCK: no hace la llamada real todavía --------------------------------
-    # TODO(Juan): descomentar y completar cuando exista la URL del flow:
+    # TODO(Juan): descomentar y completar cuando exista la URL del flow v2:
     #   async with httpx.AsyncClient() as client:
     #       r = await client.post(DAPTA_FLOW_STUDIO_WEBHOOK_URL, json=payload_dapta)
     #       r.raise_for_status()

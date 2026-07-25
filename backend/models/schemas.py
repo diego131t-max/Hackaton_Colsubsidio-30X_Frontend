@@ -27,7 +27,7 @@ from enum import Enum
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # =========================================================================== #
@@ -75,6 +75,10 @@ class ResultadoCalificacionDapta(BaseModel):
     call_status: str
     calificacion_lead: Literal["caliente", "tibio", "frio"]
 
+    # Motivo de desconexión que envía Dapta (no_answer, voicemail, completed…).
+    # Campo extra respecto al contrato original; lo aceptamos para tener contexto.
+    disconnection_reason: str | None = None
+
     # Datos sensibles/financieros finos, capturados en conversación, no en el
     # formulario:
     ahorros_cesantias_declarado: str | None = None
@@ -83,6 +87,37 @@ class ResultadoCalificacionDapta(BaseModel):
     cesantias_futuras_incluidas: bool | None = None
     disponible_visita: bool | None = None
     resumen_llamada: str
+
+    # --- Blindaje de contrato (defensa ante lo que mande el agente de voz) --- #
+    @field_validator("calificacion_lead", mode="before")
+    @classmethod
+    def _normalizar_calificacion(cls, v: object) -> object:
+        """Tolera 'frío' con tilde y mayúsculas -> canoniza a 'frio'/'tibio'/'caliente'."""
+        if isinstance(v, str):
+            t = v.strip().lower()
+            for a, b in (("í", "i"), ("é", "e"), ("á", "a"), ("ó", "o"), ("ú", "u")):
+                t = t.replace(a, b)
+            return t
+        return v
+
+    @field_validator(
+        "primas_incluidas_plan_pago",
+        "cesantias_futuras_incluidas",
+        "disponible_visita",
+        mode="before",
+    )
+    @classmethod
+    def _coercionar_bool(cls, v: object) -> object:
+        """Acepta 'Sí'/'No' (y variantes) además de booleanos reales."""
+        if isinstance(v, str):
+            t = v.strip().lower()
+            if t in {"sí", "si", "true", "1", "yes", "y", "verdadero"}:
+                return True
+            if t in {"no", "false", "0", "n", "falso"}:
+                return False
+            if t in {"", "none", "null", "n/a", "na"}:
+                return None
+        return v
 
 
 # =========================================================================== #
