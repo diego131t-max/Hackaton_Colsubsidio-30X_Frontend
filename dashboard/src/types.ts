@@ -1,9 +1,10 @@
 /**
- * Tipos del dashboard — ESPEJO del contrato de datos del backend
- * (backend/models/schemas.py). Si el contrato cambia allá, se actualiza aquí.
+ * Tipos del dashboard — ESPEJO del contrato del backend
+ * (backend/models/schemas.py), adaptado a la vista de MAPA DEL SISTEMA.
  *
- * REGLA DE ORO (igual que en el backend): estos tipos reflejan el contrato
- * acordado; no inventar campos sin avisar al equipo.
+ * El monitor muestra las 5 PIEZAS del sistema como nodos y a los leads
+ * viajando entre ellas. (El backend maneja etapas más finas internamente;
+ * aquí las agrupamos por pieza para que la operación se lea de un vistazo.)
  */
 
 // --- Espejo de SenalBowl (Bloque A del contrato) --------------------------- //
@@ -41,30 +42,31 @@ export interface ResultadoCalificacionDapta {
   resumen_llamada: string;
 }
 
-// --- Etapas del pipeline (el flujo de triggers) ---------------------------- //
-export type EtapaId =
-  | "bowl_completado"
-  | "backend_recibido"
-  | "clustering_asignado"
-  | "dapta_llamando"
-  | "resultado_calificacion"
-  | "ficha_traspaso";
+// --- Piezas del sistema (los nodos del mapa) ------------------------------- //
+export type PiezaId = "bowl" | "backend" | "clustering" | "dapta" | "asesor";
 
-export type EstadoEtapa = "inactivo" | "en_proceso" | "completado" | "error";
+export type EstadoNodo = "inactivo" | "en_proceso" | "completado" | "error";
 
-export const ETAPAS: { id: EtapaId; nombre: string }[] = [
-  { id: "bowl_completado", nombre: "Bowl completado" },
-  { id: "backend_recibido", nombre: "Backend recibe" },
-  { id: "clustering_asignado", nombre: "Clustering asigna" },
-  { id: "dapta_llamando", nombre: "Dapta llama" },
-  { id: "resultado_calificacion", nombre: "Resultado calificación" },
-  { id: "ficha_traspaso", nombre: "Ficha al asesor" },
+export interface Pieza {
+  id: PiezaId;
+  nombre: string;
+  icono: string;
+  descripcion: string; // qué hace, en una línea
+}
+
+export const PIEZAS: Pieza[] = [
+  { id: "bowl", nombre: "Bowl", icono: "🥗", descripcion: "Captura señales del cliente" },
+  { id: "backend", nombre: "Backend", icono: "🖥️", descripcion: "Reglas H1–H10 + orquesta" },
+  { id: "clustering", nombre: "Clustering", icono: "🧩", descripcion: "Asigna perfil y recomienda" },
+  { id: "dapta", nombre: "Dapta", icono: "📞", descripcion: "Llama y califica el lead" },
+  { id: "asesor", nombre: "Asesor", icono: "📄", descripcion: "Recibe la ficha de traspaso" },
 ];
 
 export interface HitoTimeline {
-  etapa: EtapaId;
-  estado: EstadoEtapa;
+  pieza: PiezaId;
+  estado: EstadoNodo;
   timestamp: number; // epoch ms
+  nota?: string; // narración de qué pasó
 }
 
 // --- Lead tal como lo ve el dashboard -------------------------------------- //
@@ -72,27 +74,31 @@ export interface Lead {
   id: string;
   senal: SenalBowl;
   canal_origen: string;
-  etapaActual: EtapaId;
-  estadoEtapaActual: EstadoEtapa;
+  nodoActual: PiezaId;
+  estadoNodo: EstadoNodo;
+  clusterId?: string;
+  proyectosRecomendados?: string[];
   calificacion?: Calificacion;
   resultadoDapta?: ResultadoCalificacionDapta;
   timeline: HitoTimeline[];
   updatedAt: number; // epoch ms del último cambio
 }
 
-// --- Estado de integraciones ----------------------------------------------- //
-export type SaludConexion = "viva" | "caida" | "desconocida";
+// --- Plugins / integraciones ----------------------------------------------- //
+export type SaludConexion = "viva" | "caida" | "sin_datos";
 
-export interface EstadoIntegraciones {
-  supabase: { estado: SaludConexion; detalle: string };
-  daptaWebhook: {
-    estado: SaludConexion;
-    ultimoEventoTs: number | null; // epoch ms del último evento recibido
-  };
-  backendReglas: { estado: SaludConexion; detalle: string };
+export interface EstadoPlugin {
+  id: string;
+  nombre: string;
+  icono: string;
+  estado: SaludConexion;
+  detalle: string;
+  ultimoEventoTs?: number | null;
 }
 
 // --- Eventos que emite el DataSource --------------------------------------- //
-export type LeadEvent =
-  | { tipo: "nuevo"; lead: Lead }
-  | { tipo: "actualizado"; lead: Lead };
+export type LeadEvent = {
+  tipo: "nuevo" | "actualizado";
+  lead: Lead;
+  nota?: string; // frase para el registro de actividad
+};

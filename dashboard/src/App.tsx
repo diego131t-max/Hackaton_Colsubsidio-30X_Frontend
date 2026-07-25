@@ -1,55 +1,62 @@
 /**
- * App — dashboard interno de monitoreo (single page).
+ * App — dashboard interno de monitoreo (single page): MAPA DEL SISTEMA.
  *
  * Se suscribe al DataSource (hoy mock, mañana Supabase) y mantiene el estado de
- * los leads. Deriva de cada evento: qué lead se actualizó (para animar su fila)
- * y qué etapa se tocó (para el flash del pipeline). No sabe de dónde vienen los
- * datos: solo habla contra la interfaz DataSource.
+ * los leads. De cada evento arma: el mapa en vivo, el registro narrado de
+ * actividad y los KPIs. No sabe de dónde vienen los datos: solo habla contra la
+ * interfaz DataSource.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { PipelineFlow } from "./components/PipelineFlow";
-import { LeadsFeed } from "./components/LeadsFeed";
-import { IntegrationsPanel } from "./components/IntegrationsPanel";
+import { useEffect, useState } from "react";
+import { SystemMap } from "./components/SystemMap";
+import { PluginsPanel } from "./components/PluginsPanel";
+import { ActivityLog, type EntradaLog } from "./components/ActivityLog";
 import { LeadDetail } from "./components/LeadDetail";
 import { dataSource } from "./data";
-import type { EstadoIntegraciones, EtapaId, Lead } from "./types";
+import type { EstadoPlugin, Lead } from "./types";
+
+const MAX_LOG = 40;
 
 export function App() {
   const [leads, setLeads] = useState<Map<string, Lead>>(new Map());
-  const [integraciones, setIntegraciones] = useState<EstadoIntegraciones | null>(
-    null,
-  );
+  const [plugins, setPlugins] = useState<EstadoPlugin[]>([]);
+  const [log, setLog] = useState<EntradaLog[]>([]);
   const [seleccionadoId, setSeleccionadoId] = useState<string | null>(null);
-  const [recienActualizadoId, setRecienActualizadoId] = useState<string | null>(
-    null,
-  );
-  const [ultimaEtapaTocada, setUltimaEtapaTocada] = useState<EtapaId | null>(null);
-  const flashTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [tick, setTick] = useState(0); // fuerza refresco de los "hace Xs"
 
   // Suscripción al stream de leads.
   useEffect(() => {
+    let n = 0;
     const desuscribir = dataSource.suscribirseALeads((evento) => {
       const lead = evento.lead;
       setLeads((prev) => new Map(prev).set(lead.id, lead));
-      setRecienActualizadoId(lead.id);
-      setUltimaEtapaTocada(lead.etapaActual);
 
-      clearTimeout(flashTimer.current);
-      flashTimer.current = setTimeout(() => setRecienActualizadoId(null), 1100);
+      if (evento.nota) {
+        const tono: EntradaLog["tono"] =
+          lead.estadoNodo === "error"
+            ? "error"
+            : lead.nodoActual === "asesor"
+              ? "ok"
+              : "info";
+        const entrada: EntradaLog = {
+          id: `log-${Date.now()}-${n++}`,
+          ts: Date.now(),
+          texto: evento.nota,
+          tono,
+        };
+        setLog((prev) => [entrada, ...prev].slice(0, MAX_LOG));
+      }
     });
-    return () => {
-      desuscribir();
-      clearTimeout(flashTimer.current);
-    };
+    return desuscribir;
   }, []);
 
-  // Polling del estado de integraciones + "tick" para refrescar los "hace Xs".
+  // Polling de plugins + tick de reloj para refrescar tiempos relativos.
   useEffect(() => {
     let vivo = true;
     const cargar = async () => {
-      const e = await dataSource.obtenerEstadoIntegraciones();
-      if (vivo) setIntegraciones(e);
+      const p = await dataSource.obtenerEstadoPlugins();
+      if (vivo) setPlugins(p);
+      setTick((t) => t + 1);
     };
     cargar();
     const t = setInterval(cargar, 2000);
@@ -59,11 +66,17 @@ export function App() {
     };
   }, []);
 
-  const listaLeads = [...leads.values()];
+  const lista = [...leads.values()];
   const seleccionado = seleccionadoId ? leads.get(seleccionadoId) ?? null : null;
 
+  // KPIs de la operación.
+  const activos = lista.filter((l) => l.nodoActual !== "asesor").length;
+  const enDapta = lista.filter((l) => l.nodoActual === "dapta").length;
+  const calientes = lista.filter((l) => l.calificacion === "caliente").length;
+  const entregados = lista.filter((l) => l.nodoActual === "asesor").length;
+
   return (
-    <div className="app">
+    <div className="app" data-tick={tick}>
       <header className="topbar">
         <div className="brand">
           <div className="brand__mark">CS</div>
@@ -78,16 +91,36 @@ export function App() {
         </span>
       </header>
 
-      <PipelineFlow leads={listaLeads} ultimaEtapaTocada={ultimaEtapaTocada} />
+      <div className="kpis">
+        <div className="kpi">
+          <span className="kpi__num">{activos}</span>
+          <span className="kpi__lbl">Leads activos</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi__num">{enDapta}</span>
+          <span className="kpi__lbl">En llamada (Dapta)</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi__num" data-cal="caliente">
+            {calientes}
+          </span>
+          <span className="kpi__lbl">Calientes</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi__num">{entregados}</span>
+          <span className="kpi__lbl">Fichas entregadas</span>
+        </div>
+      </div>
 
-      <div className="grid" style={{ marginTop: 18 }}>
-        <LeadsFeed
-          leads={listaLeads}
-          seleccionadoId={seleccionadoId}
-          recienActualizadoId={recienActualizadoId}
-          onSeleccionar={setSeleccionadoId}
-        />
-        <IntegrationsPanel estado={integraciones} />
+      <SystemMap
+        leads={lista}
+        seleccionadoId={seleccionadoId}
+        onSeleccionarLead={setSeleccionadoId}
+      />
+
+      <div className="grid">
+        <ActivityLog entradas={log} />
+        <PluginsPanel plugins={plugins} />
       </div>
 
       {seleccionado && (

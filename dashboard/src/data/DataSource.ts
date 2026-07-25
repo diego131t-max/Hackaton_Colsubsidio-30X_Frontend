@@ -7,7 +7,7 @@
  * componentes. Se cambia la fuente en UN SOLO punto: src/data/index.ts.
  */
 
-import type { EstadoIntegraciones, Lead, LeadEvent } from "../types";
+import type { EstadoPlugin, Lead, LeadEvent } from "../types";
 
 export type Desuscribir = () => void;
 
@@ -21,6 +21,6 @@ export interface DataSource {
   /** Devuelve la ficha completa de un lead (para el panel de detalle). */
   obtenerLeadPorId(id: string): Promise<Lead | null>;
 
-  /** Estado actual de las integraciones (Supabase, Dapta, backend). */
-  obtenerEstadoIntegraciones(): Promise<EstadoIntegraciones>;
+  /** Estado actual de los plugins/integraciones (Supabase, Dapta, backend…). */
+  obtenerEstadoPlugins(): Promise<EstadoPlugin[]>;
 }

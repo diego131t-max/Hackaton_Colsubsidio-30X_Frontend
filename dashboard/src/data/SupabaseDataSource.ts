@@ -10,7 +10,7 @@
  * Instalar cuando se active:  npm i @supabase/supabase-js
  */
 
-import type { EstadoIntegraciones, Lead, LeadEvent } from "../types";
+import type { EstadoPlugin, Lead, LeadEvent } from "../types";
 import type { DataSource, Desuscribir } from "./DataSource";
 
 // TODO(equipo): mover a variables de entorno (dashboard usa VITE_*), NUNCA
@@ -26,21 +26,17 @@ export class SupabaseDataSource implements DataSource {
     //
     //   const channel = this.client
     //     .channel("leads-monitor")
-    //     .on(
-    //       "postgres_changes",
+    //     .on("postgres_changes",
     //       { event: "INSERT", schema: "public", table: "leads" },
-    //       (payload) => _callback({ tipo: "nuevo", lead: mapFila(payload.new) }),
-    //     )
-    //     .on(
-    //       "postgres_changes",
+    //       (p) => _callback({ tipo: "nuevo", lead: mapFila(p.new) }))
+    //     .on("postgres_changes",
     //       { event: "UPDATE", schema: "public", table: "leads" },
-    //       (payload) => _callback({ tipo: "actualizado", lead: mapFila(payload.new) }),
-    //     )
+    //       (p) => _callback({ tipo: "actualizado", lead: mapFila(p.new) }))
     //     .subscribe();
-    //   return () => { this.client.removeChannel(channel); };
+    //   return () => this.client.removeChannel(channel);
     //
-    // Cada cambio de etapa en el backend debe hacer UPDATE de la fila del lead
-    // (columna etapa_actual / estado) para que ese UPDATE dispare este callback.
+    // Cada cambio de pieza en el backend debe hacer UPDATE de la fila del lead
+    // (columna nodo_actual / estado) para que ese UPDATE dispare este callback.
     throw new Error("SupabaseDataSource: pendiente (se activa cuando exista el proyecto).");
   }
 
@@ -50,12 +46,12 @@ export class SupabaseDataSource implements DataSource {
     throw new Error("SupabaseDataSource.obtenerLeadPorId: pendiente.");
   }
 
-  async obtenerEstadoIntegraciones(): Promise<EstadoIntegraciones> {
+  async obtenerEstadoPlugins(): Promise<EstadoPlugin[]> {
     // TODO: derivar salud real:
     //   - supabase: ping/heartbeat a la conexión Realtime.
-    //   - daptaWebhook: SELECT max(created_at) de una tabla de eventos de Dapta.
-    //   - backendReglas: fetch a GET /health del backend (ver backend/main.py).
-    throw new Error("SupabaseDataSource.obtenerEstadoIntegraciones: pendiente.");
+    //   - dapta: SELECT max(created_at) de una tabla de eventos de Dapta.
+    //   - backend: fetch a GET /health del backend (ver backend/main.py).
+    throw new Error("SupabaseDataSource.obtenerEstadoPlugins: pendiente.");
   }
 }
 

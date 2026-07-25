@@ -1,9 +1,11 @@
 /**
  * MockDataSource — implementación de DataSource con datos SIMULADOS.
  *
- * Sirve para que el dashboard funcione y se vea bien en la demo AUNQUE Supabase
- * todavía no exista. Genera eventos realistas: leads que avanzan de etapa cada
- * pocos segundos, sembrados con los perfiles de prueba del equipo.
+ * Sirve para que el dashboard funcione y se vea bien AUNQUE Supabase todavía no
+ * exista. El flujo es DELIBERADO (no ruido aleatorio): en cada tick avanza el
+ * lead que lleva más tiempo sin moverse, así se lee como una cola que progresa.
+ * Cada movimiento emite una NOTA en lenguaje natural para el registro de
+ * actividad, para que se entienda qué está pasando.
  *
  * Cuando Supabase esté listo, NO se toca este archivo: se cambia la fuente en
  * src/data/index.ts por SupabaseDataSource.
@@ -11,19 +13,28 @@
 
 import type {
   Calificacion,
-  EstadoIntegraciones,
+  EstadoPlugin,
   Lead,
   LeadEvent,
+  PiezaId,
   SenalBowl,
 } from "../types";
-import { ETAPAS } from "../types";
+import { PIEZAS } from "../types";
 import type { DataSource, Desuscribir } from "./DataSource";
 
 // --- Perfiles de prueba que ya usa el equipo ------------------------------- //
-const PERFILES: { senal: SenalBowl; canal: string; califFinal: Calificacion }[] = [
+const PERFILES: {
+  senal: SenalBowl;
+  canal: string;
+  califFinal: Calificacion;
+  cluster: string;
+  proyectos: string[];
+}[] = [
   {
     canal: "pauta_digital",
     califFinal: "caliente",
+    cluster: "VIS-Norte-familias",
+    proyectos: ["Ciudadela VIS Norte", "Torres del Parque VIS"],
     senal: {
       tipo_vivienda: "vis",
       nombre: "Laura",
@@ -42,6 +53,8 @@ const PERFILES: { senal: SenalBowl; canal: string; califFinal: Calificacion }[] 
   {
     canal: "instagram",
     califFinal: "tibio",
+    cluster: "NoVIS-inversionista",
+    proyectos: ["Nuva Park", "Reserva del Bosque"],
     senal: {
       tipo_vivienda: "no_vis",
       nombre: "Andrés",
@@ -60,6 +73,8 @@ const PERFILES: { senal: SenalBowl; canal: string; califFinal: Calificacion }[] 
   {
     canal: "referido",
     califFinal: "caliente",
+    cluster: "VIS-Sur-numerosa",
+    proyectos: ["Ciudadela VIS Norte", "Altos de Soacha"],
     senal: {
       tipo_vivienda: "vis",
       nombre: "Juan",
@@ -77,25 +92,35 @@ const PERFILES: { senal: SenalBowl; canal: string; califFinal: Calificacion }[] 
   },
 ];
 
-const ORDEN_ETAPAS = ETAPAS.map((e) => e.id);
+const ORDEN: PiezaId[] = PIEZAS.map((p) => p.id);
 
-function crearLead(
-  perfil: (typeof PERFILES)[number],
-  indice: number,
-): Lead {
+function perfilDe(correo: string) {
+  return PERFILES.find((p) => p.senal.correo === correo)!;
+}
+
+function crearLead(perfil: (typeof PERFILES)[number], idx: number): Lead {
   const ahora = Date.now();
   return {
-    id: `lead-${indice}-${Math.random().toString(36).slice(2, 7)}`,
+    id: `lead-${idx}-${Math.random().toString(36).slice(2, 6)}`,
     senal: perfil.senal,
     canal_origen: perfil.canal,
-    etapaActual: "bowl_completado",
-    estadoEtapaActual: "completado",
+    nodoActual: "bowl",
+    estadoNodo: "completado",
     timeline: [
-      { etapa: "bowl_completado", estado: "completado", timestamp: ahora },
+      {
+        pieza: "bowl",
+        estado: "completado",
+        timestamp: ahora,
+        nota: "Completó el bowl",
+      },
     ],
     updatedAt: ahora,
   };
 }
+
+const NOMBRE_PIEZA: Record<PiezaId, string> = Object.fromEntries(
+  PIEZAS.map((p) => [p.id, p.nombre]),
+) as Record<PiezaId, string>;
 
 export class MockDataSource implements DataSource {
   private leads = new Map<string, Lead>();
@@ -111,91 +136,128 @@ export class MockDataSource implements DataSource {
 
   private sembrar() {
     for (const perfil of PERFILES) {
-      const lead = crearLead(perfil, this.contador++);
-      this.emitir({ tipo: "nuevo", lead });
+      this.emitir({
+        tipo: "nuevo",
+        lead: crearLead(perfil, this.contador++),
+        nota: `Nuevo lead entró por ${perfil.canal}`,
+      });
     }
   }
 
-  /** Avanza un lead a la siguiente etapa (o lo deja en la última). */
+  /** Construye la nota + campos según a qué pieza llega el lead. */
   private avanzar(lead: Lead) {
-    const idx = ORDEN_ETAPAS.indexOf(lead.etapaActual);
-    if (idx >= ORDEN_ETAPAS.length - 1) return; // ya terminó
+    const idx = ORDEN.indexOf(lead.nodoActual);
+    if (idx >= ORDEN.length - 1) return; // ya llegó al asesor
 
-    const perfil = PERFILES.find(
-      (p) => p.senal.correo === lead.senal.correo,
-    );
-    const siguiente = ORDEN_ETAPAS[idx + 1];
+    const perfil = perfilDe(lead.senal.correo);
+    const siguiente = ORDEN[idx + 1];
     const ahora = Date.now();
 
-    // 8% de probabilidad de simular un error en Dapta (para ver el estado error).
-    const esError = siguiente === "dapta_llamando" && Math.random() < 0.08;
+    // Error raro y realista: a veces Dapta no logra contactar.
+    const esError = siguiente === "dapta" && Math.random() < 0.06;
     const estado = esError ? "error" : "en_proceso";
+
+    let nota = "";
+    const extra: Partial<Lead> = {};
+
+    switch (siguiente) {
+      case "backend":
+        nota = `${lead.senal.nombre}: backend aplicó reglas H1–H10`;
+        break;
+      case "clustering":
+        nota = `${lead.senal.nombre}: agrupada/o en clúster "${perfil.cluster}"`;
+        extra.clusterId = perfil.cluster;
+        extra.proyectosRecomendados = perfil.proyectos;
+        break;
+      case "dapta":
+        nota = esError
+          ? `${lead.senal.nombre}: Dapta no logró contactar (se reintenta)`
+          : `${lead.senal.nombre}: Dapta inició la llamada`;
+        break;
+      case "asesor":
+        this.ultimoEventoDaptaTs = ahora;
+        extra.calificacion = perfil.califFinal;
+        extra.resultadoDapta = {
+          call_id: `call-${lead.id}`,
+          call_status: "completed",
+          calificacion_lead: perfil.califFinal,
+          ahorros_cesantias_declarado: perfil.senal.afiliado
+            ? "$6.000.000 en cesantías"
+            : "No declara",
+          vivienda_nombre_propio_o_herencia: "No",
+          primas_incluidas_plan_pago: perfil.senal.afiliado,
+          cesantias_futuras_incluidas: perfil.senal.afiliado,
+          disponible_visita: perfil.califFinal !== "frio",
+          resumen_llamada:
+            perfil.califFinal === "caliente"
+              ? "Muy interesado/a, quiere agendar visita esta semana."
+              : "Interés moderado, pidió información por WhatsApp.",
+        };
+        nota = `${lead.senal.nombre}: calificado ${perfil.califFinal.toUpperCase()} → ficha enviada al asesor`;
+        break;
+    }
 
     const actualizado: Lead = {
       ...lead,
-      etapaActual: siguiente,
-      estadoEtapaActual: estado,
-      timeline: [...lead.timeline, { etapa: siguiente, estado, timestamp: ahora }],
+      ...extra,
+      nodoActual: siguiente,
+      estadoNodo: estado,
+      timeline: [
+        ...lead.timeline,
+        { pieza: siguiente, estado, timestamp: ahora, nota },
+      ],
       updatedAt: ahora,
     };
 
-    // Al llegar el resultado de calificación, adjuntamos el ResultadoDapta.
-    if (siguiente === "resultado_calificacion" && perfil) {
-      this.ultimoEventoDaptaTs = ahora;
-      actualizado.calificacion = perfil.califFinal;
-      actualizado.resultadoDapta = {
-        call_id: `call-${lead.id}`,
-        call_status: "completed",
-        calificacion_lead: perfil.califFinal,
-        ahorros_cesantias_declarado:
-          perfil.senal.afiliado ? "$6.000.000 en cesantías" : "No declara",
-        vivienda_nombre_propio_o_herencia: "No",
-        primas_incluidas_plan_pago: perfil.senal.afiliado,
-        cesantias_futuras_incluidas: perfil.senal.afiliado,
-        disponible_visita: perfil.califFinal !== "frio",
-        resumen_llamada:
-          perfil.califFinal === "caliente"
-            ? "Muy interesado/a, quiere agendar visita esta semana."
-            : "Interés moderado, pidió información por WhatsApp.",
-      };
-    }
+    this.emitir({ tipo: "actualizado", lead: actualizado, nota });
 
-    this.emitir({ tipo: "actualizado", lead: actualizado });
-
-    // Si quedó en_proceso, lo pasamos a completado un momento después para que
-    // la animación de "en proceso -> completado" se lea en la demo.
+    // Un momento después, "en_proceso" -> "completado" (o el error se resuelve
+    // y reintenta), para que la transición de estado se lea en la demo.
     if (estado === "en_proceso") {
       setTimeout(() => {
-        const completado: Lead = {
-          ...this.leads.get(actualizado.id)!,
-          estadoEtapaActual: "completado",
-          updatedAt: Date.now(),
-        };
-        this.emitir({ tipo: "actualizado", lead: completado });
-      }, 1400);
+        const actual = this.leads.get(actualizado.id);
+        if (!actual) return;
+        this.emitir({
+          tipo: "actualizado",
+          lead: { ...actual, estadoNodo: "completado", updatedAt: Date.now() },
+        });
+      }, 1200);
+    } else if (estado === "error") {
+      // Se recupera: vuelve a "en_proceso" en Dapta tras el reintento.
+      setTimeout(() => {
+        const actual = this.leads.get(actualizado.id);
+        if (!actual) return;
+        this.emitir({
+          tipo: "actualizado",
+          lead: { ...actual, estadoNodo: "en_proceso", updatedAt: Date.now() },
+          nota: `${lead.senal.nombre}: Dapta contactó en el reintento`,
+        });
+      }, 1600);
     }
   }
 
   suscribirseALeads(callback: (evento: LeadEvent) => void): Desuscribir {
     this.suscriptores.add(callback);
 
-    // Primer suscriptor arranca la simulación.
     if (!this.timer) {
       this.sembrar();
       this.timer = setInterval(() => {
-        // Escoge un lead que aún no haya terminado y lo avanza.
         const enCurso = [...this.leads.values()].filter(
-          (l) => l.etapaActual !== "ficha_traspaso",
+          (l) => l.nodoActual !== "asesor",
         );
         if (enCurso.length > 0) {
-          const l = enCurso[Math.floor(Math.random() * enCurso.length)];
-          this.avanzar(l);
-        } else if (this.leads.size < 9) {
-          // Todos terminaron: inyecta un lead nuevo (reusa un perfil de prueba).
+          // Avanza el que lleva más tiempo sin moverse (cola que progresa).
+          enCurso.sort((a, b) => a.updatedAt - b.updatedAt);
+          this.avanzar(enCurso[0]);
+        } else if (this.leads.size < 8) {
           const perfil = PERFILES[this.contador % PERFILES.length];
-          this.emitir({ tipo: "nuevo", lead: crearLead(perfil, this.contador++) });
+          this.emitir({
+            tipo: "nuevo",
+            lead: crearLead(perfil, this.contador++),
+            nota: `Nuevo lead entró por ${perfil.canal}`,
+          });
         }
-      }, 2600);
+      }, 2800);
     }
 
     return () => {
@@ -211,21 +273,43 @@ export class MockDataSource implements DataSource {
     return this.leads.get(id) ?? null;
   }
 
-  async obtenerEstadoIntegraciones(): Promise<EstadoIntegraciones> {
-    // Mock: Supabase aún no existe, así que lo reportamos como "desconocida".
-    return {
-      supabase: {
-        estado: "desconocida",
-        detalle: "Proyecto Supabase pendiente (se crea mañana).",
+  async obtenerEstadoPlugins(): Promise<EstadoPlugin[]> {
+    const enDapta = [...this.leads.values()].some((l) => l.nodoActual === "dapta");
+    return [
+      {
+        id: "supabase",
+        nombre: "Supabase",
+        icono: "🗄️",
+        estado: "sin_datos",
+        detalle: "Proyecto pendiente (se crea mañana)",
       },
-      daptaWebhook: {
-        estado: this.ultimoEventoDaptaTs ? "viva" : "desconocida",
+      {
+        id: "dapta",
+        nombre: "Dapta",
+        icono: "📞",
+        estado: this.ultimoEventoDaptaTs ? "viva" : enDapta ? "viva" : "sin_datos",
+        detalle: "Webhook de voz/WhatsApp",
         ultimoEventoTs: this.ultimoEventoDaptaTs,
       },
-      backendReglas: {
+      {
+        id: "backend",
+        nombre: "Backend de reglas",
+        icono: "🖥️",
         estado: "viva",
-        detalle: "Motor de reglas H1–H10 respondiendo (mock).",
+        detalle: "H1–H10 respondiendo (mock)",
       },
-    };
+      {
+        id: "clustering",
+        nombre: "Clustering",
+        icono: "🧩",
+        estado: "viva",
+        detalle: "Modelo mock (Santiago DS lo reemplaza)",
+      },
+    ];
+  }
+
+  // Expuesto solo por conveniencia para narración en UI.
+  nombrePieza(id: PiezaId) {
+    return NOMBRE_PIEZA[id];
   }
 }

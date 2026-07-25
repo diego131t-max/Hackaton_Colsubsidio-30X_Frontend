@@ -3,8 +3,10 @@
 Panel de control **interno** del sistema (para el equipo y la demo al jurado).
 **No** es la interfaz del cliente final — esa es el bowl en [`../frontend/`](../frontend/).
 
-Muestra en tiempo real: el flujo de triggers del pipeline, el feed de leads, el
-estado de las integraciones y el detalle de cada lead.
+Es un **mapa de la operación en vivo**: las 5 piezas del sistema como nodos
+conectados, y los leads como fichas que se deslizan de un nodo al siguiente
+(el flujo de datos). Incluye un registro de actividad narrado, el estado de los
+plugins y el detalle de cada lead.
 
 ## Correr
 
@@ -42,8 +44,8 @@ src/
 │   ├── SupabaseDataSource.ts# stub Realtime (TODO)
 │   └── index.ts             # punto único para elegir la fuente
 └── components/
-    ├── PipelineFlow.tsx      # flujo de triggers en vivo
-    ├── LeadsFeed.tsx         # feed de leads
-    ├── IntegrationsPanel.tsx # salud de integraciones
+    ├── SystemMap.tsx         # mapa de piezas + fichas de leads que fluyen
+    ├── ActivityLog.tsx       # registro de actividad narrado
+    ├── PluginsPanel.tsx      # estado de plugins/integraciones (solo estado)
     └── LeadDetail.tsx        # ficha completa de un lead
 ```

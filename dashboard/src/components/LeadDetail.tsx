@@ -1,13 +1,14 @@
 /**
  * LeadDetail — panel (drawer) con la ficha completa de un lead.
  *
- * Al hacer clic en un lead del feed, muestra: datos de SenalBowl, el
+ * Al hacer clic en una ficha del mapa, muestra: datos de SenalBowl, el
  * ResultadoCalificacionDapta si ya llegó (con los campos sensibles, que solo
- * existen en este punto del flujo), y la línea de tiempo de cambios de estado.
+ * existen en este punto del flujo), y la línea de tiempo de su recorrido por
+ * las piezas del sistema.
  */
 
-import type { Lead } from "../types";
-import { ETAPAS } from "../types";
+import type { Lead, PiezaId } from "../types";
+import { PIEZAS } from "../types";
 import { hora } from "../utils";
 
 interface Props {
@@ -15,7 +16,9 @@ interface Props {
   onCerrar: () => void;
 }
 
-const NOMBRE_ETAPA = Object.fromEntries(ETAPAS.map((e) => [e.id, e.nombre]));
+const NOMBRE_PIEZA = Object.fromEntries(
+  PIEZAS.map((p) => [p.id, p.nombre]),
+) as Record<PiezaId, string>;
 
 function siNo(v?: boolean | null): string {
   if (v == null) return "—";
@@ -30,12 +33,12 @@ export function LeadDetail({ lead, onCerrar }: Props) {
     <>
       <div className="drawer-backdrop" onClick={onCerrar} />
       <aside className="drawer" role="dialog" aria-label="Detalle del lead">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="drawer__top">
           <div>
-            <div className="lead-name" style={{ fontSize: 18 }}>
+            <div className="drawer__name">
               {s.nombre} {s.apellido}
             </div>
-            <div className="lead-meta">
+            <div className="drawer__meta">
               {lead.canal_origen} ·{" "}
               {lead.calificacion ? (
                 <span className="badge" data-cal={lead.calificacion}>
@@ -51,7 +54,6 @@ export function LeadDetail({ lead, onCerrar }: Props) {
           </button>
         </div>
 
-        {/* --- SenalBowl --- */}
         <div className="detail-section">
           <div className="detail-section__title">Señal del bowl</div>
           <dl className="kv">
@@ -78,7 +80,18 @@ export function LeadDetail({ lead, onCerrar }: Props) {
           </dl>
         </div>
 
-        {/* --- ResultadoCalificacionDapta --- */}
+        {(lead.clusterId || lead.proyectosRecomendados) && (
+          <div className="detail-section">
+            <div className="detail-section__title">Clustering</div>
+            <dl className="kv">
+              <dt>Clúster</dt>
+              <dd>{lead.clusterId ?? "—"}</dd>
+              <dt>Proyectos</dt>
+              <dd>{lead.proyectosRecomendados?.join(", ") ?? "—"}</dd>
+            </dl>
+          </div>
+        )}
+
         <div className="detail-section">
           <div className="detail-section__title">Resultado de Dapta</div>
           {d ? (
@@ -107,16 +120,15 @@ export function LeadDetail({ lead, onCerrar }: Props) {
           )}
         </div>
 
-        {/* --- Timeline --- */}
         <div className="detail-section">
-          <div className="detail-section__title">Línea de tiempo</div>
+          <div className="detail-section__title">Recorrido</div>
           <ol className="timeline">
             {lead.timeline.map((h, i) => (
               <li key={i} data-estado={h.estado}>
                 <div className="t-etapa">
-                  {NOMBRE_ETAPA[h.etapa]}{" "}
-                  {h.estado === "error" ? "· error" : ""}
+                  {NOMBRE_PIEZA[h.pieza]} {h.estado === "error" ? "· error" : ""}
                 </div>
+                {h.nota && <div className="t-nota">{h.nota}</div>}
                 <div className="t-time">{hora(h.timestamp)}</div>
               </li>
             ))}
