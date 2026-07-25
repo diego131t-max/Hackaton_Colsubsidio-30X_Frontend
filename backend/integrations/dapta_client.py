@@ -16,17 +16,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend import config
 from backend.models.schemas import (
     FichaTraspaso,
     ResultadoCalificacionDapta,
     ResultadoClustering,
     SenalBowl,
 )
-
-# TODO (Juan): pegar la URL real del webhook de Flow Studio cuando el flow
-# esté creado. Debe venir de variable de entorno, NUNCA hardcodeada en el repo.
-#   Ej.: DAPTA_FLOW_STUDIO_WEBHOOK_URL = os.environ["DAPTA_FLOW_STUDIO_WEBHOOK_URL"]
-DAPTA_FLOW_STUDIO_WEBHOOK_URL: str | None = None
 
 
 async def disparar_llamada(
@@ -101,13 +97,24 @@ async def disparar_llamada(
         "subsidio_estimado": subsidio_estimado,
     }
 
-    # --- MOCK: no hace la llamada real todavía --------------------------------
-    # TODO(Juan): descomentar y completar cuando exista la URL del flow v2:
-    #   async with httpx.AsyncClient() as client:
-    #       r = await client.post(DAPTA_FLOW_STUDIO_WEBHOOK_URL, json=payload_dapta)
-    #       r.raise_for_status()
-    #       return r.json()
-    return {"status": "mock_enqueued", "payload_enviado": payload_dapta}
+    url = config.DAPTA_FLOW_STUDIO_WEBHOOK_URL
+
+    # Sin URL configurada (p. ej. en tests o sin .env) -> modo mock, no llama.
+    if not url:
+        return {"status": "mock_enqueued", "payload_enviado": payload_dapta}
+
+    # POST real al flow v2 de Dapta. La URL ya incluye el x-api-key como query
+    # param, así que no hace falta header extra.
+    import httpx
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        r = await client.post(url, json=payload_dapta)
+        r.raise_for_status()
+        try:
+            cuerpo = r.json()
+        except ValueError:
+            cuerpo = r.text
+        return {"status": "enviado", "http_status": r.status_code, "respuesta": cuerpo}
 
 
 def recibir_resultado_calificacion(
