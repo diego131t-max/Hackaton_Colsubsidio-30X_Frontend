@@ -25,6 +25,8 @@ function siNo(v?: boolean | null): string {
   return v ? "Sí" : "No";
 }
 
+const PISO_LABEL: Record<number, string> = { 1: "Bajo", 2: "Medio", 3: "Alto" };
+
 export function LeadDetail({ lead, onCerrar }: Props) {
   const s = lead.senal;
   const d = lead.resultadoDapta;
@@ -71,8 +73,14 @@ export function LeadDetail({ lead, onCerrar }: Props) {
             <dd>{s.zona_interes}</dd>
             <dt>Tipo inmueble</dt>
             <dd>{s.tipo_inmueble ?? "—"}</dd>
-            <dt>Entorno deseado</dt>
-            <dd>{s.entorno_deseado ?? "—"}</dd>
+            <dt>Piso preferido</dt>
+            <dd>{PISO_LABEL[s.piso_preferido as number] ?? s.piso_preferido ?? "—"}</dd>
+            <dt>Amenidades</dt>
+            <dd>
+              {Array.isArray(s.entorno_deseado)
+                ? s.entorno_deseado.join(", ") || "—"
+                : s.entorno_deseado ?? "—"}
+            </dd>
             <dt>Teléfono</dt>
             <dd>{s.telefono_movil}</dd>
             <dt>Correo</dt>

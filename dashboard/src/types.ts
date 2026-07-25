@@ -22,9 +22,9 @@ export interface SenalBowl {
   edad: number;
   personas_a_cargo: number;
   zona_interes: string;
-  piso_preferido?: string | null;
+  piso_preferido?: number | string | null; // 1=bajo, 2=medio, 3=alto
   tipo_inmueble?: TipoInmueble | null;
-  entorno_deseado?: string | null;
+  entorno_deseado?: string[] | string | null; // lista de amenidades
 }
 
 // --- Espejo de ResultadoCalificacionDapta (Bloque B) ----------------------- //

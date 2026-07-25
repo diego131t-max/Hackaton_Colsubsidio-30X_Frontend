@@ -35,6 +35,23 @@ from pydantic import BaseModel, Field, field_validator
 # =========================================================================== #
 # ESTO ES EXACTAMENTE lo que recibe el modelo de clustering como input.
 # NO lo cambies sin que Santiago DS lo sepa (es la entrada de su modelo).
+# --------------------------------------------------------------------------- #
+# Opciones de `entorno_deseado` (amenidades) — set definido por el equipo del
+# formulario (Carlos). El front las muestra como multi-select; el usuario elige
+# varias y llegan como lista. Mantener alineados estos slugs con la UI.
+# --------------------------------------------------------------------------- #
+ENTORNO_DESEADO_OPCIONES: list[str] = [
+    "lobby", "piscina", "zona_lavanderia", "zona_bbq", "zona_pet", "zona_kid",
+    "locales_comerciales", "zona_fitness", "salon_social", "spa_mascotas",
+    "zona_cool", "zona_cine", "coworking", "sala_vip", "zona_cafe", "gimnasio",
+    "parqueadero", "zona_verde", "parque", "sala_de_juegos", "pista_de_trote",
+    "voleibol_playa", "cancha_de_padel", "taller_de_bicicletas", "sauna",
+]
+
+# Piso preferido: el front muestra bajo/medio/alto; el valor viaja como 1/2/3.
+PISO_PREFERIDO_LABELS = {1: "bajo", 2: "medio", 3: "alto"}
+
+
 # =========================================================================== #
 class SenalBowl(BaseModel):
     """Payload que el bowl (frontend) hace POST a `POST /leads`."""
@@ -56,11 +73,43 @@ class SenalBowl(BaseModel):
     edad: int
     personas_a_cargo: int
     zona_interes: str
-    piso_preferido: str | None = None
+    # 1=bajo, 2=medio, 3=alto (ver PISO_PREFERIDO_LABELS). Tolera "bajo"/"medio"/
+    # "alto"/"sin_preferencia" por compatibilidad con el front actual.
+    piso_preferido: Literal[1, 2, 3] | None = None
     tipo_inmueble: Literal["apartamento", "casa", "sin_preferencia"] | None = None
-    # ej. "cerca a colegio", "zona verde", "cerca al trabajo".
-    # NO es un dropdown de proyectos específicos si el bowl es buscador general.
-    entorno_deseado: str | None = None
+    # LISTA de amenidades (ver ENTORNO_DESEADO_OPCIONES). Acepta también un solo
+    # string (se envuelve en lista) por compatibilidad con el front actual.
+    entorno_deseado: list[str] | None = None
+
+    # --- Compatibilidad / normalización -------------------------------------- #
+    @field_validator("piso_preferido", mode="before")
+    @classmethod
+    def _norm_piso(cls, v: object) -> object:
+        if v is None or isinstance(v, bool):
+            return None
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            t = v.strip().lower()
+            mapa = {"bajo": 1, "medio": 2, "alto": 3, "1": 1, "2": 2, "3": 3}
+            if t in mapa:
+                return mapa[t]
+            if t in ("", "sin_preferencia", "sin preferencia", "null", "none"):
+                return None
+        return v
+
+    @field_validator("entorno_deseado", mode="before")
+    @classmethod
+    def _norm_entorno(cls, v: object) -> object:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            t = v.strip()
+            return [t] if t else None
+        if isinstance(v, (list, tuple)):
+            items = [str(x).strip() for x in v if str(x).strip()]
+            return items or None
+        return v
 
 
 # =========================================================================== #
