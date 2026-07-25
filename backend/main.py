@@ -36,6 +36,7 @@ import logging
 from uuid import UUID, uuid4
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend import config
 from backend.core import clustering_client, handoff_card
@@ -51,6 +52,26 @@ app = FastAPI(
     title="Reto Vivienda Colsubsidio x 30X — Backend",
     description="Puertos de integración del sistema (modelado end-to-end).",
     version="0.2.0",
+)
+
+# CORS — el formulario corre en OTRO origen (localhost:5500 en dev, o el dominio
+# del frontend en prod) y el navegador exige estas cabeceras para permitir el POST.
+# Sin esto, el browser bloquea la petición y el lead nunca llega.
+if config.FRONTEND_ORIGIN.strip() in ("", "*"):
+    _origins = ["*"]  # abierto para el hackathon; TODO(seguridad): restringir en prod
+else:
+    _origins = [
+        config.FRONTEND_ORIGIN.strip(),
+        "http://localhost:5500",
+        "http://localhost:5173",
+        "http://localhost:5174",
+    ]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=False,
 )
 
 # TODO(infra): reemplazar por un almacén real (Supabase/DB). En memoria solo
