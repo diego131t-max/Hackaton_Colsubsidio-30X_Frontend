@@ -1,0 +1,4 @@
+# Requirements en la raíz para que Render (y cualquier `pip install -r
+# requirements.txt` por defecto) encuentre las dependencias del backend.
+# La fuente de verdad sigue siendo backend/requirements.txt.
+-r backend/requirements.txt
