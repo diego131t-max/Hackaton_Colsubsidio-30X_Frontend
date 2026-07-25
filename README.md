@@ -70,10 +70,27 @@ Bowl (SenalBowl)
 ## Puesta en marcha
 
 ```bash
-# Backend
+# Backend (local)
 pip install -r backend/requirements.txt
+cp .env.example .env        # y rellenar (Dapta URL, Supabase, etc.)
 uvicorn backend.main:app --reload        # docs interactivas en /docs
 ```
+
+## Despliegue del backend (Render)
+
+El repo trae un [`render.yaml`](render.yaml) (Blueprint). Pasos:
+
+1. En Render → **New → Web Service** (o **Blueprint** para usar `render.yaml`), conecta este repo.
+2. Si no usas el Blueprint: **Build** = `pip install -r backend/requirements.txt`,
+   **Start** = `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`, **Health check** = `/health`.
+3. Define las **env vars** en el dashboard de Render (las mismas de `.env.example`):
+   `DAPTA_FLOW_STUDIO_WEBHOOK_URL`, `SUPABASE_URL`, `SUPABASE_KEY`,
+   `DAPTA_WEBHOOK_SECRET` (opcional), `FRONTEND_ORIGIN`.
+4. Cuando esté arriba, la URL del **webhook de resultado** para darle a Dapta (Nodo 9) es:
+   `https://<tu-app>.onrender.com/webhooks/dapta/resultado`
+
+Ese webhook valida el resultado y lo **escribe en Supabase**, así el dashboard lo
+muestra en vivo por Realtime (correlación por `call_id`).
 
 - **Backend:** FastAPI + Pydantic. Endpoints y contratos ya modelados; la lógica interna de cada pieza es stub/mock.
 - **Frontend:** Node (recomendado Vite + React). `TODO`: dependencias reales en `frontend/package.json`.

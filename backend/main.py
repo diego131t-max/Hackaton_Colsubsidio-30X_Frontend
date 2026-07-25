@@ -34,10 +34,11 @@ from __future__ import annotations
 import logging
 from uuid import UUID, uuid4
 
-from fastapi import BackgroundTasks, FastAPI
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 
+from backend import config
 from backend.core import clustering_client, handoff_card
-from backend.integrations import dapta_client
+from backend.integrations import dapta_client, supabase_client
 from backend.models.schemas import (
     ResultadoCalificacionDapta,
     SenalBowl,
@@ -105,23 +106,36 @@ async def crear_lead(
 @app.post("/webhooks/dapta/resultado")
 async def webhook_dapta_resultado(
     resultado: ResultadoCalificacionDapta,
+    x_dapta_secret: str | None = Header(default=None),
 ) -> dict[str, str]:
     """
-    Recibe el resultado de calificación de Dapta (voz/WhatsApp) y completa la
-    FichaTraspaso final. Pydantic valida el payload contra el contrato.
+    Recibe el resultado de calificación de Dapta (voz/WhatsApp), lo valida contra
+    el contrato y lo persiste en Supabase (la fila del lead con ese `call_id`)
+    para que el dashboard lo muestre en vivo.
 
-    TODO(seguridad): verificar autenticidad del emisor antes de confiar en esto.
-    TODO(infra): correlacionar `call_id` con el lead_id real (hoy la ficha se
-      guarda en memoria por lead_id; falta el mapeo call_id -> lead_id).
+    Seguridad: si DAPTA_WEBHOOK_SECRET está configurado, exige el header
+    X-Dapta-Secret. Si no está configurado, acepta (con TODO de cerrarlo).
     """
-    # TODO: recuperar la ficha correcta usando el mapeo call_id -> lead_id.
-    # Placeholder: si hubiera exactamente una ficha en proceso, se completa.
+    # Verificación de autenticidad (opcional hasta configurar el secreto).
+    if config.DAPTA_WEBHOOK_SECRET:
+        if x_dapta_secret != config.DAPTA_WEBHOOK_SECRET:
+            raise HTTPException(status_code=401, detail="Firma de webhook inválida")
+
+    # Persistir en Supabase -> el dashboard lo refleja por Realtime.
+    resultado_persistencia = await supabase_client.guardar_resultado(resultado)
+
+    # Compatibilidad: si había una ficha en memoria, también se completa.
     if len(_fichas_en_proceso) == 1:
         (lead_id, ficha), = _fichas_en_proceso.items()
-        ficha_final = handoff_card.aplicar_resultado_dapta(ficha, resultado)  # type: ignore[arg-type]
-        _fichas_en_proceso[lead_id] = ficha_final
+        _fichas_en_proceso[lead_id] = handoff_card.aplicar_resultado_dapta(
+            ficha, resultado  # type: ignore[arg-type]
+        )
 
-    return {"call_id": resultado.call_id, "status": "recibido"}
+    return {
+        "call_id": resultado.call_id,
+        "status": "recibido",
+        "persistencia": resultado_persistencia.get("estado", "?"),
+    }
 
 
 @app.get("/health")

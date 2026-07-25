@@ -27,8 +27,15 @@ DAPTA_FLOW_STUDIO_WEBHOOK_URL: str | None = os.environ.get(
 )
 
 # Secreto compartido para verificar el webhook de resultado ENTRANTE de Dapta.
-# TODO(seguridad): usarlo en /webhooks/dapta/resultado (HMAC o header).
+# Si está definido, /webhooks/dapta/resultado exige el header X-Dapta-Secret.
 DAPTA_WEBHOOK_SECRET: str | None = os.environ.get("DAPTA_WEBHOOK_SECRET")
 
 # Origen permitido para CORS (el frontend). TODO(seguridad): aplicarlo.
 FRONTEND_ORIGIN: str = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+
+# Supabase: el backend escribe el resultado de Dapta en la tabla de leads para
+# que el dashboard lo muestre en vivo (Realtime). Reusa el proyecto COLSUBSIDIO-leads.
+SUPABASE_URL: str | None = os.environ.get("SUPABASE_URL")
+# Key con permiso de escritura. En el hackathon vale la publishable (RLS permisiva);
+# en producción usar service_role y cerrar RLS.
+SUPABASE_KEY: str | None = os.environ.get("SUPABASE_KEY")

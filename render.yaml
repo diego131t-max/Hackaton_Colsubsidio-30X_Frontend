@@ -1,0 +1,26 @@
+# Render Blueprint — despliega el backend FastAPI como Web Service.
+# Cómo usar: en Render -> New -> Blueprint, conecta este repo. Render lee este
+# archivo. Luego define las env vars marcadas sync:false en el dashboard.
+services:
+  - type: web
+    name: reto-vivienda-backend
+    runtime: python
+    plan: free
+    # El repo es monorepo; el backend importa como paquete desde la raíz.
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      # Secretos: se definen en el dashboard de Render (NO se versionan).
+      - key: DAPTA_FLOW_STUDIO_WEBHOOK_URL
+        sync: false
+      - key: DAPTA_WEBHOOK_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
