@@ -1,15 +1,9 @@
 {
   "name": "reto-vivienda-frontend",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Frontend del bowl de captura de señales — Reto Vivienda Colsubsidio x 30X (Carlos).",
-  "type": "module",
+  "description": "Frontend del bowl de captura de señales — Reto Vivienda Colsubsidio x 30X (Carlos). HTML/CSS/JS vanilla, sin build step.",
   "scripts": {
-    "dev": "echo \"TODO(Carlos): configurar dev server (Vite/Next)\" && exit 1",
-    "build": "echo \"TODO(Carlos): configurar build\" && exit 1",
-    "lint": "echo \"TODO(Carlos): configurar lint\" && exit 1"
-  },
-  "comentario": "TODO(Carlos): elegir toolchain (Vite + React recomendado), añadir dependencias reales (react, react-dom) y devDependencies (typescript, vite). Este package.json es un stub acordado, no la config final.",
-  "dependencies": {},
-  "devDependencies": {}
+    "dev": "npx --yes serve . -l 5500"
+  }
 }
