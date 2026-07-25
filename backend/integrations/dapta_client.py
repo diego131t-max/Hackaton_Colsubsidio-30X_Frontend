@@ -34,6 +34,7 @@ async def disparar_llamada(
     valor_estimado_vivienda: float | None = None,
     subsidio_estimado: float | None = None,
     proyecto_interes: str | None = None,
+    external_lead_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Arma el payload que espera el webhook del flow `colsubsidio-vivienda-
@@ -95,6 +96,9 @@ async def disparar_llamada(
         "cuota_estimada_mensual": cuota_estimada_mensual,
         "valor_estimado_vivienda": valor_estimado_vivienda,
         "subsidio_estimado": subsidio_estimado,
+        # Nuestro id para correlacionar el resultado: si Dapta lo devuelve como
+        # call_id en el webhook de resultado, el match es directo.
+        "external_lead_id": external_lead_id,
     }
 
     url = config.DAPTA_FLOW_STUDIO_WEBHOOK_URL

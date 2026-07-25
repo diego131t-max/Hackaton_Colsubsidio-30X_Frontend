@@ -31,6 +31,7 @@ TODOs de seguridad (fuera del alcance de esta pasada — dejar explícitos):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from uuid import UUID, uuid4
 
@@ -61,26 +62,68 @@ _fichas_en_proceso: dict[UUID, object] = {}
 # Orquestación del pipeline (corre en background para no bloquear /leads)
 # --------------------------------------------------------------------------- #
 async def _procesar_lead(lead_id: UUID, senal: SenalBowl) -> None:
-    """Encadena reglas -> clustering -> ficha inicial -> disparo a Dapta."""
-    # 1) Motor de reglas (H1-H10). Pieza existente; puede seguir siendo stub.
+    """
+    Persiste el lead en Supabase y lo mueve por las piezas del pipeline
+    (backend -> clustering -> dapta) para que el dashboard lo muestre en vivo.
+    Usa el lead_id como call_id para poder correlacionar el resultado de Dapta.
+    """
+    call_id = str(lead_id)
+    timeline: list[dict] = [
+        {"pieza": "bowl", "estado": "completado", "nota": "Completó el formulario"},
+        {"pieza": "backend", "estado": "en_proceso", "nota": "Reglas H1–H10"},
+    ]
+
+    # 1) Persistir en Supabase (etapa backend). El dashboard lo ve al instante.
     try:
-        from backend.core import rules_engine  # import local: aún es stub
+        await supabase_client.crear_lead(lead_id, senal, call_id)
+    except Exception:  # noqa: BLE001 - no queremos tumbar el pipeline por I/O
+        logger.exception("No se pudo crear el lead %s en Supabase", lead_id)
 
-        # TODO(backend): reconciliar firma real de rules_engine con SenalBowl.
-        rules_engine  # noqa: B018  (referencia explícita; sin lógica todavía)
-    except NotImplementedError:
-        logger.info("rules_engine aún es stub; se omite en el pipeline mock.")
+    # (Motor de reglas H1-H10: aún stub; aquí iría su cálculo real.)
+    await asyncio.sleep(0.8)  # pequeño delay para que el flujo se vea en el dashboard
 
-    # 2) Clustering (mock determinístico por ahora).
+    # 2) Clustering.
     clustering = await clustering_client.predecir_cluster(senal)
+    timeline.append(
+        {"pieza": "clustering", "estado": "completado",
+         "nota": f'Agrupado en "{clustering.cluster_id}"'}
+    )
+    await supabase_client.actualizar_lead(
+        lead_id,
+        {
+            "nodo_actual": "clustering",
+            "estado_nodo": "completado",
+            "cluster_id": clustering.cluster_id,
+            "proyectos_recomendados": clustering.proyectos_recomendados,
+            "timeline": timeline,
+        },
+    )
+    _fichas_en_proceso[lead_id] = handoff_card.iniciar_ficha(lead_id, senal, clustering)
 
-    # 3) Ficha inicial (sin datos de Dapta todavía).
-    ficha = handoff_card.iniciar_ficha(lead_id, senal, clustering)
-    _fichas_en_proceso[lead_id] = ficha
+    # 3) Etapa Dapta.
+    await asyncio.sleep(0.8)
+    timeline.append(
+        {"pieza": "dapta", "estado": "en_proceso", "nota": "En llamada con Manuela"}
+    )
+    await supabase_client.actualizar_lead(
+        lead_id,
+        {"nodo_actual": "dapta", "estado_nodo": "en_proceso", "timeline": timeline},
+    )
 
-    # 4) Disparo a Dapta (mock; no hace la llamada real todavía).
-    resultado_disparo = await dapta_client.disparar_llamada(senal, clustering)
-    logger.info("Lead %s: disparo a Dapta -> %s", lead_id, resultado_disparo)
+    # 4) Disparo REAL a Dapta solo si está activado (evita llamadas de prueba).
+    if config.DAPTA_LLAMADAS_ACTIVAS:
+        try:
+            disparo = await dapta_client.disparar_llamada(
+                senal, clustering, external_lead_id=call_id
+            )
+            logger.info("Lead %s: disparo a Dapta -> %s", lead_id, disparo.get("status"))
+        except Exception:  # noqa: BLE001
+            logger.exception("Fallo al disparar la llamada de Dapta para %s", lead_id)
+    else:
+        logger.info(
+            "Lead %s en etapa 'dapta' (DAPTA_LLAMADAS_ACTIVAS=false, no se llama).",
+            lead_id,
+        )
 
 
 # --------------------------------------------------------------------------- #

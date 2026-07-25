@@ -26,6 +26,13 @@ DAPTA_FLOW_STUDIO_WEBHOOK_URL: str | None = os.environ.get(
     "DAPTA_FLOW_STUDIO_WEBHOOK_URL"
 )
 
+# Si es true, `POST /leads` dispara la llamada REAL de Dapta. Por defecto false
+# para no gastar créditos ni llamar números de prueba, y porque el From Number
+# de Dapta aún no está configurado. Ponlo en "true" en Render cuando esté listo.
+DAPTA_LLAMADAS_ACTIVAS: bool = os.environ.get(
+    "DAPTA_LLAMADAS_ACTIVAS", "false"
+).strip().lower() in {"1", "true", "yes", "si", "sí"}
+
 # Secreto compartido para verificar el webhook de resultado ENTRANTE de Dapta.
 # Si está definido, /webhooks/dapta/resultado exige el header X-Dapta-Secret.
 DAPTA_WEBHOOK_SECRET: str | None = os.environ.get("DAPTA_WEBHOOK_SECRET")
