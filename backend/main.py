@@ -144,8 +144,12 @@ async def _procesar_lead(lead_id: UUID, senal: SenalBowl) -> None:
     )
     if config.DAPTA_LLAMADAS_ACTIVAS:
         try:
+            finanzas = recomendaciones_client.estimar_finanzas(
+                senal, recomendaciones_client.buscar_proyecto(proyecto)
+            )
             disparo = await dapta_client.disparar_llamada(
-                senal, clustering, external_lead_id=call_id, proyecto_interes=proyecto
+                senal, clustering, external_lead_id=call_id, proyecto_interes=proyecto,
+                **finanzas,
             )
             logger.info("Lead %s: disparo a Dapta -> %s", lead_id, disparo.get("status"))
         except Exception:  # noqa: BLE001
@@ -240,8 +244,12 @@ async def _finalizar_lead(lead_id: UUID, senal: SenalBowl) -> None:
 
     if config.DAPTA_LLAMADAS_ACTIVAS:
         try:
+            finanzas = recomendaciones_client.estimar_finanzas(
+                senal, recomendaciones_client.buscar_proyecto(proyecto)
+            )
             await dapta_client.disparar_llamada(
-                senal, clustering, external_lead_id=call_id, proyecto_interes=proyecto
+                senal, clustering, external_lead_id=call_id, proyecto_interes=proyecto,
+                **finanzas,
             )
         except Exception:  # noqa: BLE001
             logger.exception("Fallo al disparar Dapta para %s", lead_id)
