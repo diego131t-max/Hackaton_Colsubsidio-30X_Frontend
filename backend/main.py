@@ -40,7 +40,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend import config
 from backend.core import clustering_client, handoff_card
-from backend.integrations import dapta_client, supabase_client
+from backend.integrations import dapta_client, recomendaciones_client, supabase_client
 from backend.models.schemas import (
     ResultadoCalificacionDapta,
     SenalBowl,
@@ -132,10 +132,16 @@ async def _procesar_lead(lead_id: UUID, senal: SenalBowl) -> None:
     )
 
     # 4) Disparo REAL a Dapta solo si está activado (evita llamadas de prueba).
+    #    Dapta habla del proyecto ELEGIDO por la persona (o el top recomendado).
+    proyecto = senal.proyecto_elegido or (
+        clustering.proyectos_recomendados[0]
+        if clustering.proyectos_recomendados
+        else None
+    )
     if config.DAPTA_LLAMADAS_ACTIVAS:
         try:
             disparo = await dapta_client.disparar_llamada(
-                senal, clustering, external_lead_id=call_id
+                senal, clustering, external_lead_id=call_id, proyecto_interes=proyecto
             )
             logger.info("Lead %s: disparo a Dapta -> %s", lead_id, disparo.get("status"))
         except Exception:  # noqa: BLE001
@@ -150,14 +156,24 @@ async def _procesar_lead(lead_id: UUID, senal: SenalBowl) -> None:
 # --------------------------------------------------------------------------- #
 # PUERTO DE ENTRADA 1 — el frontend hace POST del bowl
 # --------------------------------------------------------------------------- #
+@app.post("/recomendaciones")
+async def recomendaciones(senal: SenalBowl) -> dict:
+    """
+    Paso 1 del flujo: recibe el SenalBowl (parte del formulario) y devuelve el
+    Top 6 de inmuebles con match_score, para que el formulario los muestre. NO
+    crea el lead ni dispara Dapta — eso ocurre al confirmar, en POST /leads.
+    """
+    return await recomendaciones_client.recomendar(senal, top=6)
+
+
 @app.post("/leads", status_code=202)
 async def crear_lead(
     senal: SenalBowl, background: BackgroundTasks
 ) -> dict[str, str]:
     """
-    Recibe la señal del bowl, la valida (Pydantic la valida automáticamente y
-    devuelve 422 con detalle si no matchea el contrato) y encola el pipeline.
-    Responde de inmediato con el lead_id.
+    Paso final: la persona ya eligió proyecto (senal.proyecto_elegido) y confirma.
+    Valida (Pydantic -> 422 si no matchea el contrato), encola el pipeline y
+    responde de inmediato con el lead_id.
     """
     lead_id = uuid4()
     background.add_task(_procesar_lead, lead_id, senal)

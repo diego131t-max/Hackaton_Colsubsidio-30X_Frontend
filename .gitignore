@@ -46,6 +46,8 @@ env/
 #   git lfs install && git lfs track "*.pkl"
 *.pkl
 .ipynb_checkpoints/
+# Salida generada por el modelo de recomendaciones (no versionar)
+modelo_recomendaciones/recomendaciones.json
 
 # ---------------------------------------------------------------------------
 # Sistema operativo / editor

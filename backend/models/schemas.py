@@ -84,6 +84,11 @@ class SenalBowl(BaseModel):
     # string (se envuelve en lista) por compatibilidad con el front actual.
     entorno_deseado: list[str] | None = None
 
+    # Proyecto que la persona ELIGIÓ tras ver las recomendaciones (se envía en la
+    # confirmación final; Dapta hablará de este proyecto). Opcional: en el primer
+    # POST a /recomendaciones aún no existe.
+    proyecto_elegido: str | None = None
+
     # --- Compatibilidad / normalización -------------------------------------- #
     @field_validator("piso_preferido", mode="before")
     @classmethod
