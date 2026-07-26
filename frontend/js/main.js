@@ -17,11 +17,34 @@
 
   function render() {
     var sameScreen = state.screen === lastScreen;
+    // Reconstruir TODO el innerHTML también destruye y recrea el nodo que
+    // tenía el scroll (p. ej. .gdf-escarapela, que scrollea internamente), así
+    // que sin esto cada click en "afiliado" o en el check de consentimiento
+    // volvía el scroll a 0 — se sentía como si la página se recargara.
+    // Restauramos tanto el scroll interno del propio .gdf-screen como el de
+    // la página, para pantallas que scrollean como página normal.
+    var prevScrollTop = 0;
+    var prevWindowScroll = 0;
+    if (sameScreen) {
+      var prevScreenEl = root.querySelector('.gdf-screen');
+      prevScrollTop = prevScreenEl ? prevScreenEl.scrollTop : 0;
+      prevWindowScroll = window.scrollY;
+    }
     var derived = window.GDF.state.computeDerived(state);
     root.innerHTML = window.GDF.templates.renderApp(state, derived);
     if (sameScreen) {
       var screenEl = root.querySelector('.gdf-screen');
-      if (screenEl) screenEl.style.animation = 'none';
+      if (screenEl) {
+        screenEl.style.animation = 'none';
+        screenEl.scrollTop = prevScrollTop;
+      }
+      window.scrollTo(0, prevWindowScroll);
+      // Las tarjetas de proyecto entran con floatUp escalonado (hasta 0.44s
+      // de delay). Eso está bien la primera vez que se ve la lista, pero al
+      // marcar un proyecto se reconstruye el innerHTML y las 6 volvían a
+      // animarse: un parpadeo completo de la lista en cada clic.
+      var cards = root.querySelectorAll('.gdf-project-card');
+      for (var c = 0; c < cards.length; c++) cards[c].style.animation = 'none';
     }
     lastScreen = state.screen;
     attachInputListeners();
@@ -101,6 +124,28 @@
       });
     }
 
+    // Los <details> se abren/cierran solos (comportamiento nativo, sin JS ni
+    // re-render). Lo único que hace falta es ANOTAR si quedaron abiertos,
+    // para que un re-render posterior — marcar el proyecto, por ejemplo — los
+    // vuelva a pintar como estaban. No se despacha por el listener delegado
+    // porque 'toggle' no es un clic.
+    var detalles = root.querySelectorAll('.gdf-project-detalle');
+    for (var d = 0; d < detalles.length; d++) {
+      (function (el) {
+        el.addEventListener('toggle', function () {
+          state.detalleAbierto[el.dataset.proyecto] = el.open;
+        });
+      })(detalles[d]);
+    }
+    var sims = root.querySelectorAll('.gdf-sim[data-sim-proyecto]');
+    for (var s = 0; s < sims.length; s++) {
+      (function (el) {
+        el.addEventListener('toggle', function () {
+          state.simAbierto[el.dataset.simProyecto] = el.open;
+        });
+      })(sims[s]);
+    }
+
     var quizTextInput = document.getElementById('quizTextInput');
     if (quizTextInput) {
       quizTextInput.addEventListener('keydown', function (e) {
@@ -155,19 +200,119 @@
       updateLandingSlideDOM();
       return;
     }
+    // Mismo criterio que el carrusel: son cambios DENTRO de una tarjeta ya
+    // pintada. Un render() completo cerraría el <details> abierto y volvería
+    // a crear los <img> de los planos (parpadeo). Se parchea el DOM y listo.
+    if (action === 'verTipologia') {
+      updateTipologiaDOM(dataset);
+      return;
+    }
+    if (action === 'simSet') {
+      updateSimuladorDOM(dataset);
+      return;
+    }
+    if (action === 'setDetalleAbierto') return; // el <details> ya se pintó solo
     render();
 
-    // El quiz termina y entra a 'result' exactamente una vez por partida
-    // (desde selectOption, cuando ya se contestó la última pregunta). Ese es
-    // el primer momento en que existen TODOS los campos requeridos por el
-    // contrato de leads — dispara el POST real aquí, una sola vez.
+    // PASO 1 del contrato. El quiz termina y entra a 'result' exactamente una
+    // vez por partida (desde selectOption, al contestar la última pregunta):
+    // ese es el primer momento en que existen TODOS los campos requeridos.
     if (prevScreen !== 'result' && state.screen === 'result') {
-      state.leadSubmit = { status: 'sending', leadId: null, error: null };
+      cargarRecomendaciones();
+    }
+  }
+
+  // POST /recomendaciones. Se usa igual en la primera carga y al reintentar.
+  function cargarRecomendaciones() {
+    window.GDF.state.applyAction(state, 'recoCargando', {});
+    render();
+    window.GDF.recommender.recomendar(state, function (resultado) {
+      window.GDF.state.applyAction(state, 'recoResuelta', resultado);
       render();
-      window.GDF.leads.submitLead(state, function (result) {
-        state.leadSubmit = result;
-        render();
-      });
+    });
+  }
+
+  // Salida de emergencia cuando el backend no responde: se muestran los
+  // proyectos del catálogo local marcados como aproximados. Nunca se hace en
+  // silencio — `aproximado: true` pinta un aviso permanente en la lista.
+  function usarLocalAproximado() {
+    window.GDF.recommender.recomendarLocal(state.answers, function (resultado) {
+      window.GDF.state.applyAction(state, 'recoResuelta', resultado);
+      render();
+    });
+  }
+
+  // PASO 2 del contrato: confirmar el proyecto elegido.
+  function confirmarProyecto() {
+    if (!state.chosen) return;
+    window.GDF.state.applyAction(state, 'envioEstado', { estado: 'enviando' });
+    render();
+    window.GDF.leads.enviarProyectoElegido(state, state.reco.leadId, state.chosen, function (r) {
+      window.GDF.state.applyAction(state, 'envioEstado', r);
+      render();
+    });
+  }
+
+  // Busca la tarjeta del proyecto por nombre. Se usa el nombre y no el índice
+  // porque el orden de la lista puede cambiar (clustering).
+  function cardDe(nombreProyecto) {
+    var cards = root.querySelectorAll('.gdf-project-detalle');
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].dataset.proyecto === nombreProyecto) return cards[i];
+    }
+    return null;
+  }
+
+  // Cambio de pestaña Tipo A / Tipo B: solo mueve la clase .active entre los
+  // botones y entre los paneles de ESA tarjeta.
+  function updateTipologiaDOM(ds) {
+    var card = cardDe(ds.proyecto);
+    if (!card) return;
+    var idx = String(parseInt(ds.idx, 10) || 0);
+
+    var tabs = card.querySelectorAll('.gdf-tipo-tab');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('active', tabs[i].dataset.idx === idx);
+    }
+    var panels = card.querySelectorAll('.gdf-tipo-panel');
+    for (var j = 0; j < panels.length; j++) {
+      panels[j].classList.toggle('active', panels[j].dataset.panel === idx);
+    }
+  }
+
+  // Recalcula la cuota al mover "cuota inicial" o "plazo". Repinta solo el
+  // bloque de resultado; los controles se actualizan moviendo .active.
+  function updateSimuladorDOM(ds) {
+    var card = cardDe(ds.proyecto);
+    if (!card) return;
+    // Puede haber un simulador por tipología: se actualiza el del panel
+    // visible (o el único que exista, en proyectos sin tipologías).
+    var body =
+      card.querySelector('.gdf-tipo-panel.active .gdf-sim-body') ||
+      card.querySelector('.gdf-sim-body');
+    if (!body) return;
+
+    var cfg = state.simConfig[ds.proyecto] || {};
+    var S = window.GDF.simulador.SUPUESTOS;
+    var inicial = cfg.inicial || S.cuotaInicialDefault;
+    var plazo = cfg.plazo || S.plazoDefault;
+
+    var botones = body.querySelectorAll('.gdf-sim-opt');
+    for (var i = 0; i < botones.length; i++) {
+      var b = botones[i];
+      var esperado = b.dataset.campo === 'inicial' ? inicial : plazo;
+      b.classList.toggle('active', Number(b.dataset.valor) === esperado);
+    }
+
+    var out = body.querySelector('.gdf-sim-out');
+    if (out) {
+      out.innerHTML = window.GDF.templates.simuladorResultado(
+        Number(body.dataset.precio),
+        body.dataset.vis === '1',
+        inicial,
+        plazo,
+        state.answers.ingresos
+      );
     }
   }
 
@@ -203,6 +348,21 @@
     var el = e.target.closest('[data-action]');
     if (!el) return;
 
+    // Acciones que hacen I/O: no pasan por applyAction/dispatch porque no son
+    // un cambio de estado puro, sino el disparo de una llamada de red.
+    if (el.dataset.action === 'reintentarReco') {
+      cargarRecomendaciones();
+      return;
+    }
+    if (el.dataset.action === 'usarLocalAproximado') {
+      usarLocalAproximado();
+      return;
+    }
+    if (el.dataset.action === 'confirmarProyecto') {
+      confirmarProyecto();
+      return;
+    }
+
     // Las preguntas 'number'/'text' del quiz no tienen data-value estático
     // (dependen de lo que el usuario tipeó): se lee el input al vuelo y se
     // reusa 'selectOption', que ya sabe avanzar/calificar sin cambios.
@@ -218,6 +378,19 @@
     if (el.dataset.action === 'answerQuizText') {
       var txtInput = document.getElementById('quizTextInput');
       dispatch('selectOption', { qid: el.dataset.qid, value: txtInput ? txtInput.value.trim() : '' });
+      return;
+    }
+    // 'entorno_deseado' es un checklist de casillas (no controladas, igual que
+    // los inputs de texto) dentro de un <details> desplegable. Al continuar se
+    // leen las marcadas y se guarda un ARRAY con sus `value`, que son las
+    // etiquetas exactas que espera el backend (ver data.js). No se aplana a
+    // texto ni se traduce al `label`: el contrato pide el array tal cual.
+    if (el.dataset.action === 'answerQuizMultiselect') {
+      var checked = document.querySelectorAll('#quizMultiselect input[type="checkbox"]:checked');
+      var valores = Array.prototype.map.call(checked, function (input) {
+        return input.value;
+      });
+      dispatch('selectOption', { qid: el.dataset.qid, value: valores });
       return;
     }
 

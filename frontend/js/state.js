@@ -5,7 +5,11 @@
 
   function createInitial() {
     return {
-      screen: 'landing', // landing | splash | escarapela | quiz | result
+      // landing | splash | escarapela | quiz | result | confirmacion
+      // 'result' es la pantalla de SELECCIÓN de proyectos (ya sin la casa) y
+      // 'confirmacion' es el cierre. Se conserva el nombre 'result' para no
+      // renombrar acciones/CSS que ya funcionan.
+      screen: 'landing',
       landingSlide: 0, // índice del carrusel de landing()
       // Sin pantalla de elegir personaje: 'x' (avatar neutro) por defecto.
       gender: 'x', // 'f' | 'm' | 'x'
@@ -19,18 +23,46 @@
       answers: {},
       matches: [],
       lead: null, // resultado de computeLeadQualification
+      // Selección ÚNICA: guarda el `id` del view-model elegido (id_proyecto si
+      // vino del backend). El contrato manda un solo `proyecto_elegido`, así
+      // que marcar uno desmarca el anterior.
       chosen: null,
-      // Estado del POST a nuestro backend de leads (contrato SenalBowl, ver
-      // js/leads.js). Se dispara una sola vez al llegar a 'result'.
-      leadSubmit: { status: 'idle', leadId: null, error: null },
+
+      // Paso 1 del contrato: POST /recomendaciones. Ver js/leads.js.
+      // 'vacio' NO es un error: el backend respondió bien y no tiene proyectos
+      // para esa zona; la pantalla lo dice distinto que un fallo de red.
+      reco: {
+        estado: 'idle', // idle | cargando | listo | vacio | error
+        leadId: null,
+        items: [],
+        totalCatalogo: null,
+        origenCatalogo: null,
+        error: null,
+        aproximado: false, // true = las tarjetas salen del motor local
+      },
+
+      // Paso 2 del contrato: POST /leads?lead_id=… con proyecto_elegido.
+      envio: { estado: 'idle', error: null }, // idle | enviando | enviado | error
+
+      // --- Desplegable de planos de cada tarjeta (ver detalleProyecto en
+      // templates.js). Vive en el estado, y no solo en el DOM, porque marcar
+      // un proyecto sí re-renderiza toda la lista: sin esto el desplegable se
+      // cerraría y se perdería la tipología que el usuario estaba viendo.
+      // Todos van indexados por NOMBRE de proyecto (no por posición, que
+      // cambia si el clustering reordena la lista).
+      detalleAbierto: {}, // nombre -> bool
+      simAbierto: {}, // nombre -> bool (el simulador dentro del desplegable)
+      tipologiaActiva: {}, // nombre -> índice de la pestaña
+      simConfig: {}, // nombre -> { inicial: %, plazo: años }
     };
   }
 
-  function qListFor(answers) {
-    var QUESTIONS = window.GDF.data.QUESTIONS;
-    return QUESTIONS.filter(function (q) {
-      return q.cond !== 'bogota' || answers.ubicacion === 'Bogotá';
-    });
+  // Ya no hay preguntas condicionales: al ser la demo solo de Bogotá se quitó
+  // la de municipio, y con ella el "pregunta la zona solo si eligió Bogotá".
+  // La función se conserva porque el resto del flujo (avance, atrás, contador)
+  // razona sobre esta lista.
+  function qListFor() {
+    return window.GDF.data.QUESTIONS;
   }
 
   function computeDerived(state) {
@@ -42,10 +74,10 @@
       return state.answers[x.id] !== undefined;
     });
     var answered = answeredQs.length;
-    // 9 preguntas base (tipo, ingresos, personas, edad, ubicacion,
-    // habitaciones, tipo_inmueble, piso_preferido, entorno_deseado) + zona
-    // solo si eligió Bogotá.
-    var stepTotal = 9 + (state.answers.ubicacion === 'Bogotá' ? 1 : 0);
+    // Ya no es un número fijo con excepciones: todas las preguntas se hacen
+    // siempre (tipo, ingresos, personas, edad, zona/localidad, habitaciones,
+    // piso_preferido, entorno_deseado), así que el total es la lista misma.
+    var stepTotal = qList.length;
 
     var revealedIds = [];
     answeredQs.forEach(function (x) {
@@ -72,7 +104,7 @@
     if (a.tipo) perfilChips.push({ text: a.tipo, hi: true });
     if (a.ingresos) perfilChips.push({ text: a.ingresos, hi: false });
     if (a.habitaciones) perfilChips.push({ text: a.habitaciones + ' hab', hi: false });
-    if (a.ubicacion) perfilChips.push({ text: a.ubicacion + (a.zona ? ' · ' + a.zona : ''), hi: false });
+    if (a.zona) perfilChips.push({ text: a.zona, hi: false });
     if (a.afiliado === 'Sí') perfilChips.push({ text: 'Afiliado ✓', hi: true });
 
     return {
@@ -150,18 +182,55 @@
         var ni = state.qi + 1;
         state.answers = nextAnswers;
         if (ni >= list.length) {
+          // Terminó el quiz -> pantalla de selección de proyectos, en estado
+          // 'cargando'. Las recomendaciones ya NO se calculan aquí: las pide
+          // main.js al backend (paso 1 del contrato). Ver js/recommender.js.
           state.screen = 'result';
-          var matches = window.GDF.matching.computeMatches(nextAnswers);
-          state.matches = matches;
+          state.reco = {
+            estado: 'cargando', leadId: null, items: [], totalCatalogo: null,
+            origenCatalogo: null, error: null, aproximado: false,
+          };
+          state.chosen = null;
+          // La calificación del lead SÍ se calcula ya: es lógica de negocio y
+          // no debe depender de una llamada de red. Se apoya en el motor local
+          // solo para saber qué tan bien calza el mejor proyecto disponible.
+          var mejores = window.GDF.matching.computeMatches(nextAnswers, 1);
           state.lead = window.GDF.qualification.computeLeadQualification(
             nextAnswers,
-            matches[0] ? matches[0].score : 0
+            mejores[0] ? mejores[0].score : 0
           );
         } else {
           state.qi = ni;
         }
         break;
       }
+
+      // Resultado del paso 1 (POST /recomendaciones). Lo despacha main.js
+      // cuando resuelve la promesa; `ds` ES el objeto que arma recommender.js.
+      case 'recoResuelta':
+        state.reco = {
+          estado: ds.estado,
+          leadId: ds.leadId || null,
+          items: ds.items || [],
+          totalCatalogo: ds.totalCatalogo || null,
+          origenCatalogo: ds.origenCatalogo || null,
+          error: ds.error || null,
+          aproximado: !!ds.aproximado,
+        };
+        // Si la lista cambió, la selección anterior puede ya no existir.
+        if (state.chosen && !state.reco.items.some(function (x) { return x.id === state.chosen; })) {
+          state.chosen = null;
+        }
+        break;
+
+      case 'recoCargando':
+        state.reco.estado = 'cargando';
+        state.reco.error = null;
+        break;
+
+      case 'envioEstado':
+        state.envio = { estado: ds.estado, error: ds.error || null };
+        break;
 
       case 'goBack': {
         // En la primera pregunta no hay a dónde retroceder dentro del quiz:
@@ -179,8 +248,41 @@
         break;
       }
 
+      // Selección ÚNICA: el contrato manda un solo `proyecto_elegido`, así que
+      // elegir otro reemplaza al anterior. Volver a tocar el ya elegido lo
+      // desmarca, para poder deshacer sin reiniciar.
       case 'chooseProject':
-        state.chosen = ds.value;
+        state.chosen = state.chosen === ds.value ? null : ds.value;
+        break;
+
+      // Las 3 acciones del desplegable de planos solo guardan la preferencia:
+      // el repintado lo hace main.js por DOM directo (ver dispatch), porque
+      // re-renderizar aquí cerraría el <details> y recargaría los planos.
+      case 'setDetalleAbierto':
+        state.detalleAbierto[ds.proyecto] = ds.valor === '1';
+        break;
+
+      case 'verTipologia':
+        state.tipologiaActiva[ds.proyecto] = parseInt(ds.idx, 10) || 0;
+        break;
+
+      case 'simSet': {
+        var cfg = state.simConfig[ds.proyecto] || {};
+        cfg[ds.campo] = parseInt(ds.valor, 10);
+        state.simConfig[ds.proyecto] = cfg;
+        break;
+      }
+
+      case 'goConfirmacion':
+        // Sin nada marcado no tiene sentido cerrar: el botón está deshabilitado
+        // en la UI, pero se valida igual acá por si acaso.
+        if (!state.chosen) return false;
+        state.screen = 'confirmacion';
+        state.envio = { estado: 'idle', error: null };
+        break;
+
+      case 'goSeleccion':
+        state.screen = 'result';
         break;
 
       case 'restart': {

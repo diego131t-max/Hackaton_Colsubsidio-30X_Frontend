@@ -9,16 +9,17 @@
     if (qid === 'ingresos') return ['sala'];
     if (qid === 'personas') return ['comedor'];
     if (qid === 'edad') return ['cocina'];
-    if (qid === 'ubicacion') return ['balcon'];
-    if (qid === 'zona') return ['estudio'];
-    if (qid === 'tipo_inmueble') return ['vestier'];
+    // 'zona' es la localidad de Bogotá; la pregunta de municipio se quitó al
+    // dejar la demo solo en Bogotá, y sus dos cuartos se revelan juntos aquí
+    // para que la planta no pierda piezas.
+    if (qid === 'zona') return ['balcon', 'estudio'];
     if (qid === 'habitaciones') {
       // El baño lo revelaba la pregunta de ahorro, que ya no existe; va aquí
       // para que la planta no quede sin baño. El vestier se dejó de mostrar
-      // junto con la pregunta de primera vivienda.
+      // junto con la pregunta de tipo_inmueble, que tampoco existe ya.
       var h = answers.habitaciones;
       var habs = h === '1' ? ['hab1'] : h === '2' ? ['hab1', 'hab2'] : ['hab1', 'hab2', 'hab3'];
-      return habs.concat(['bano']);
+      return habs.concat(['bano', 'vestier']);
     }
     return [];
   }

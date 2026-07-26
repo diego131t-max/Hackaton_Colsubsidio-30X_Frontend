@@ -84,37 +84,18 @@
       placeholder: 'Ej: 31',
     },
     {
-      id: 'ubicacion',
+      // Ya no se pregunta el municipio: la demo es SOLO de Bogotá (los 31
+      // proyectos del catálogo son de la ciudad). Esta pregunta reemplazó a la
+      // de "¿Dónde te gustaría vivir?", que ofrecía 17 municipios.
+      // Las opciones se derivan del catálogo, así que solo aparecen localidades
+      // donde de verdad hay proyectos — ver opcionesPorFrecuencia más abajo.
+      id: 'zona',
       color: '#0067b1',
       w: 68,
-      title: '¿Dónde te gustaría vivir?',
-      sub: 'Elige el lugar; si es Bogotá te preguntamos la zona.',
+      title: '¿En qué localidad de Bogotá te gustaría vivir?',
+      sub: 'Te mostramos proyectos ahí y en las localidades vecinas.',
       cols: 2,
-      options: [
-        { v: 'Bogotá', label: 'Bogotá' },
-        { v: 'Chía', label: 'Chía' },
-        { v: 'Girardot', label: 'Girardot' },
-        { v: 'Ricaurte', label: 'Ricaurte' },
-        { v: 'Soacha', label: 'Soacha' },
-        { v: 'Tocancipá', label: 'Tocancipá' },
-        { v: 'Ubaté', label: 'Ubaté' },
-        { v: 'La Mesa', label: 'La Mesa' },
-      ],
-    },
-    {
-      id: 'zona',
-      color: '#4a94cc',
-      w: 64,
-      cond: 'bogota',
-      title: '¿En qué zona de Bogotá?',
-      sub: 'Nos ayuda a acercarte proyectos en tu área.',
-      cols: 2,
-      options: [
-        { v: 'Norte', label: 'Norte' },
-        { v: 'Occidente', label: 'Occidente' },
-        { v: 'Sur', label: 'Sur' },
-        { v: 'Centro', label: 'Centro' },
-      ],
+      options: [],
     },
     {
       id: 'habitaciones',
@@ -129,24 +110,12 @@
         { v: '3+', label: '3+' },
       ],
     },
-    // Las 3 preguntas de acá abajo son nuevas: existen solo para llenar
-    // campos OPCIONALES del contrato de leads (tipo_inmueble, piso_preferido,
+    // Las 2 preguntas de acá abajo son nuevas: existen solo para llenar
+    // campos OPCIONALES del contrato de leads (piso_preferido,
     // entorno_deseado — ver js/leads.js). Los ids coinciden 1:1 con los
     // nombres del contrato a propósito, para que el mapeo en leads.js sea
-    // casi un passthrough directo.
-    {
-      id: 'tipo_inmueble',
-      color: '#0067b1',
-      w: 56,
-      title: '¿Apartamento o casa?',
-      sub: 'Nos ayuda a afinar tu recomendación.',
-      cols: 3,
-      options: [
-        { v: 'apartamento', label: 'Apartamento' },
-        { v: 'casa', label: 'Casa' },
-        { v: 'sin_preferencia', label: 'Sin preferencia' },
-      ],
-    },
+    // casi un passthrough directo. (tipo_inmueble se quitó del quiz: sigue
+    // siendo un campo válido del contrato, leads.js lo manda como null.)
     {
       id: 'piso_preferido',
       color: '#4a94cc',
@@ -166,9 +135,43 @@
       color: '#8a8a89',
       w: 48,
       title: '¿Buscas algo en particular del entorno?',
-      sub: 'Opcional — por ejemplo "cerca a colegio" o "zona verde". Puedes dejarlo en blanco.',
-      type: 'text',
-      placeholder: 'Ej: cerca a colegio, zona verde, cerca al trabajo…',
+      sub: 'Opcional — elige todas las que apliquen.',
+      type: 'multiselect',
+      // ⚠️ Los `v` son las etiquetas EXACTAS que espera el backend y viajan tal
+      // cual en `entorno_deseado` (ver js/leads.js). No son slugs nuestros: se
+      // respetan sus erratas a propósito — "gymnasio" con y, "cancha e padel"
+      // (no "de"), "zona de lavanderia" sin tilde, "zona kid" en singular. Una
+      // letra distinta y el backend deja de cruzarlas, en silencio.
+      // Esta misma lista está DUPLICADA en tools/generar_seed_backend.py
+      // (VOCABULARIO); si cambia una, cambia la otra.
+      // El `label` sí es libre: es solo lo que ve el usuario.
+      options: [
+        { v: 'lobby', label: 'Lobby' },
+        { v: 'piscina', label: 'Piscina' },
+        { v: 'zona de lavanderia', label: 'Zona de lavandería' },
+        { v: 'zona bbq', label: 'Zona BBQ' },
+        { v: 'zona pet', label: 'Zona pet' },
+        { v: 'zona kid', label: 'Zona kids' },
+        { v: 'locales comerciales', label: 'Locales comerciales' },
+        { v: 'zona fitness', label: 'Zona fitness' },
+        { v: 'salon social', label: 'Salón social' },
+        { v: 'spa mascotas', label: 'Spa mascotas' },
+        { v: 'zona cool', label: 'Zona cool' },
+        { v: 'zona cine', label: 'Zona cine' },
+        { v: 'coworking', label: 'Coworking' },
+        { v: 'sala vip', label: 'Sala VIP' },
+        { v: 'zona cafe', label: 'Zona café' },
+        { v: 'gymnasio', label: 'Gimnasio' },
+        { v: 'parqueadero', label: 'Parqueadero' },
+        { v: 'zona verde', label: 'Zona verde' },
+        { v: 'parque', label: 'Parque' },
+        { v: 'sala de juegos', label: 'Sala de juegos' },
+        { v: 'pista de trote', label: 'Pista de trote' },
+        { v: 'voleibol playa', label: 'Voleibol playa' },
+        { v: 'cancha e padel', label: 'Cancha de pádel' },
+        { v: 'taller de bicicletas', label: 'Taller de bicicletas' },
+        { v: 'sauna', label: 'Sauna' },
+      ],
     },
   ];
 
@@ -238,7 +241,11 @@
   // de cada página — ver docs/proyectos-amenidades.md. Mismos 6 proyectos
   // sin `image` quedan también sin `amenities` (misma causa: sin ficha
   // propia en colsubsidio.com).
-  var PROJECTS = [
+  // NOTA: esta lista de 26 quedó como RESPALDO. El catálogo que usa la app es
+  // el de js/proyectos.js (66 proyectos con área/habitaciones/baños/precio
+  // OFICIALES de cada ficha, no estimados) — ver PROJECTS al final del archivo.
+  // Esta copia solo entra si proyectos.js no cargó.
+  var PROJECTS_RESPALDO = [
     { name: 'Agrupación De Vivienda Monguí', muni: 'Soacha', vis: true, price: 181, area: 47, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏢', grad: 'linear-gradient(135deg,#0067b1,#4a94cc)', image: 'assets/proyectos/agrupacion-de-vivienda-mongui.webp', amenities: ['porteria', 'salon', 'infantil', 'biosaludable', 'recreativa', 'parqueadero'] },
     { name: 'Agrupación De Vivienda La Macarena', muni: 'Soacha', vis: true, price: 151, area: 33, hab: 1, subsidy: 'Mi Casa Ya', emoji: '🏘️', grad: 'linear-gradient(135deg,#3a7bb0,#7ec0ec)', image: 'assets/proyectos/agrupacion-de-vivienda-la-macarena.webp', amenities: ['porteria', 'cancha', 'recreativa', 'biosaludable', 'infantil', 'parqueadero', 'gimnasio', 'salon'] },
     { name: 'Verde Esperanza El Dorado', muni: 'Ubaté', vis: true, price: 169, area: 50, hab: 3, subsidy: 'Mi Casa Ya', emoji: '🏡', grad: 'linear-gradient(135deg,#004c85,#0067b1)', image: 'assets/proyectos/verde-esperanza-el-dorado.webp', amenities: ['recreativa', 'salon', 'biosaludable', 'infantil', 'porteria', 'parqueadero'] },
@@ -267,14 +274,9 @@
     { name: 'Agrupación Mompós-Ciudadela Colsubsidio Maiporé', muni: 'Soacha', vis: true, price: 150, area: 47, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏡', grad: 'linear-gradient(135deg,#4a94cc,#0067b1)' },
   ];
 
-  var NEIGH = {
-    'Bogotá': ['Soacha', 'Chía', 'Tocancipá'],
-    'Soacha': ['Bogotá'],
-    'Chía': ['Bogotá', 'Tocancipá'],
-    'Tocancipá': ['Bogotá', 'Chía'],
-    'Girardot': ['Ricaurte'],
-    'Ricaurte': ['Girardot'],
-  };
+  // (La tabla de cercanía entre MUNICIPIOS se eliminó: la demo es solo de
+  // Bogotá y la cercanía que importa ahora es entre LOCALIDADES, que llega
+  // ya calculada de los límites oficiales en GDF_LOCALIDADES_VECINAS.)
 
   // Selección de personaje: puramente cosmético (carné + marcador en la
   // escena). No entra en computeLeadQualification — el PDF del hackathon
@@ -285,6 +287,54 @@
     { v: 'x', label: 'Sin especificar', emoji: '👷' },
   ];
 
+  // El catálogo real lo genera tools/scrape_proyectos.py en js/proyectos.js
+  // (se carga antes que este archivo). Si por lo que sea no está, la app
+  // sigue viva con los 26 de respaldo de arriba en vez de quedarse en blanco.
+  var PROJECTS = window.GDF_PROYECTOS && window.GDF_PROYECTOS.length
+    ? window.GDF_PROYECTOS
+    : PROJECTS_RESPALDO;
+
+  // Opciones de ubicación/zona derivadas del catálogo: solo se ofrecen lugares
+  // donde SÍ hay proyectos, ordenados por cuántos hay. Evita el problema que
+  // tenía la lista escrita a mano (ofrecía La Mesa, que ya no tiene ninguno).
+  function opcionesPorFrecuencia(valores) {
+    var conteo = {};
+    valores.forEach(function (v) {
+      if (v) conteo[v] = (conteo[v] || 0) + 1;
+    });
+    return Object.keys(conteo)
+      .sort(function (a, b) {
+        return conteo[b] - conteo[a] || a.localeCompare(b, 'es');
+      })
+      .map(function (v) {
+        return { v: v, label: v };
+      });
+  }
+
+  function preguntaPorId(id) {
+    for (var i = 0; i < QUESTIONS.length; i++) {
+      if (QUESTIONS[i].id === id) return QUESTIONS[i];
+    }
+    return null;
+  }
+
+  // Las localidades que SÍ tienen proyectos en el catálogo, ordenadas por
+  // cuántos hay. Al regenerar proyectos.js la lista se actualiza sola: nunca
+  // se ofrece una localidad vacía (que sería un callejón sin salida) ni se
+  // queda por fuera una nueva.
+  preguntaPorId('zona').options = opcionesPorFrecuencia(
+    PROJECTS.map(function (p) {
+      return p.localidad;
+    })
+  );
+
+  // Localidades que colindan, calculadas de los límites oficiales del Distrito
+  // por tools/scrape_proyectos.py (ver GDF_LOCALIDADES_VECINAS en
+  // js/proyectos.js). matching.js las usa para no castigar a un proyecto que
+  // queda en la localidad de al lado. Si el archivo generado no cargó, queda
+  // un objeto vacío y el scoring simplemente trata todo como "lejos".
+  var VECINAS = window.GDF_LOCALIDADES_VECINAS || {};
+
   window.GDF = window.GDF || {};
   window.GDF.data = {
     LANDING_SLIDES: LANDING_SLIDES,
@@ -293,7 +343,7 @@
     FURN: FURN,
     PROJECTS: PROJECTS,
     AMENITIES: AMENITIES,
-    NEIGH: NEIGH,
+    VECINAS: VECINAS,
     GENDERS: GENDERS,
   };
 })();
