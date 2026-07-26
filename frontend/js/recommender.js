@@ -72,6 +72,7 @@
       origen: 'backend',
       local: local,
       factores: null, // el backend no explica su score; el motor local sí
+      razon: null, // lo redacta presentar(), ver más abajo
     };
   }
 
@@ -102,7 +103,151 @@
       origen: 'local',
       local: p,
       factores: p.factores || null,
+      razon: null, // lo redacta presentar(), ver más abajo
     };
+  }
+
+  // --- Podio fijo ----------------------------------------------------------
+  // El ORDEN lo decide el motor (o el backend); lo que se fija es el número
+  // que se muestra. Los tres primeros siempre se presentan como 96 / 94 / 89 %
+  // para que el podio se lea igual en cualquier demo, sin depender de si el
+  // usuario eligió una localidad con mucha o poca oferta —con la fórmula cruda,
+  // pedir Usaquén (1 proyecto) sacaba un "top 1" del 62 % y parecía roto.
+  // El puntaje calculado se conserva en `scoreReal` para el panel #debug.
+  var PODIO = [96, 94, 89];
+
+  function aplicarPodio(items) {
+    var previo = null;
+    items.forEach(function (vm, i) {
+      if (vm.scoreReal === undefined) vm.scoreReal = vm.score;
+      var valor;
+      if (i < PODIO.length) {
+        valor = PODIO[i];
+      } else {
+        // Fuera del podio se respeta el puntaje real, pero nunca puede
+        // alcanzar al de arriba: si lo hiciera, la lista se leería al revés.
+        // El escalón de -2 también evita el caso de una localidad con poca
+        // oferta, donde la fórmula deja a todos en el piso y se veían tres
+        // tarjetas seguidas con el mismo 51 %.
+        var calculado = vm.scoreReal != null ? vm.scoreReal : previo - 2;
+        valor = Math.max(40, Math.min(calculado, previo - 2));
+      }
+      vm.score = valor;
+      previo = valor;
+    });
+    return items;
+  }
+
+  // --- Por qué quedó en esa posición ---------------------------------------
+  // Una frase en español por tarjeta, armada con los mismos criterios que usa
+  // el scoring (localidad, habitaciones, precio contra el rango de ingresos,
+  // VIS/subsidio y las zonas comunes que el usuario marcó). Se redacta desde el
+  // view-model, así que sirve igual venga del motor local o del backend.
+  //
+  // Las frases van SIN comas internas a propósito: se unen en una lista
+  // ("a, b y c") y una coma suelta adentro haría ilegible el resultado.
+  function listaNatural(arr) {
+    if (!arr.length) return '';
+    if (arr.length === 1) return arr[0];
+    return arr.slice(0, -1).join(', ') + ' y ' + arr[arr.length - 1];
+  }
+
+  // Las etiquetas reales de la ficha a veces son una frase entera ("Zona
+  // fitness con salón de spinning y salón TRX"). Para la razón se usa solo la
+  // cabeza; el nombre completo ya aparece en el bloque de zonas comunes.
+  function nombreCorto(label) {
+    var s = String(label || '').split(/\s+con\s+|\s+-\s+|,/)[0].trim();
+    // Solo se baja la inicial: pasarlo entero a minúsculas rompía las siglas
+    // ("Salón TRX" -> "salón trx", que parece una errata).
+    return s ? s.charAt(0).toLowerCase() + s.slice(1) : '';
+  }
+
+  function frasesDeMatch(vm, a) {
+    var VECINAS = window.GDF.data.VECINAS || {};
+    var mat = window.GDF.matching;
+    var buenas = [];
+    var malas = [];
+
+    // 1. Localidad. `vm.ubicacion` viene como "Kennedy, Bogotá".
+    var localidad = String(vm.ubicacion || '').split(',')[0].trim();
+    if (localidad && a.zona) {
+      if (localidad === a.zona) buenas.push('está en ' + localidad + ' (la localidad que elegiste)');
+      else if ((VECINAS[a.zona] || []).indexOf(localidad) > -1) buenas.push('queda en ' + localidad + ' (vecina de ' + a.zona + ')');
+      else malas.push('queda en ' + localidad + ' (lejos de ' + a.zona + ')');
+    }
+
+    // 2. Habitaciones.
+    var pedidas = mat.habitacionesPedidas(a);
+    var ofrece = (vm.habitaciones || []).reduce(function (max, h) {
+      return Math.max(max, Number(h) || 0);
+    }, 0);
+    function hab(n) {
+      return n + (n === 1 ? ' habitación' : ' habitaciones');
+    }
+    if (ofrece) {
+      if ((vm.habitaciones || []).map(Number).indexOf(pedidas) > -1) buenas.push('tiene ' + (pedidas === 1 ? 'la habitación' : 'las ' + pedidas + ' habitaciones') + ' que buscas');
+      else if (ofrece > pedidas) buenas.push('ofrece ' + hab(ofrece) + ' (pediste ' + pedidas + ')');
+      else malas.push('llega a ' + hab(ofrece) + ' para las ' + pedidas + ' que pediste');
+    }
+
+    // 3. Precio contra el techo del rango de ingresos.
+    var millones = Math.round((vm.precioCop || 0) / 1e6);
+    if (millones) {
+      if (millones <= mat.bandaDe(a)) buenas.push('desde $' + millones + ' millones entra en tu presupuesto');
+      else malas.push('desde $' + millones + ' millones se pasa de tu presupuesto');
+    }
+
+    // 4. Zonas comunes que el usuario marcó en la pregunta de entorno. Se
+    // nombran máximo dos: la tarjeta ya las resalta todas con un ✓ más abajo.
+    var quiere = a.entorno_deseado || [];
+    var coinciden = [];
+    (vm.amenidades || []).forEach(function (am) {
+      var corto = nombreCorto(am.label);
+      if (am.clave && quiere.indexOf(am.clave) > -1 && corto && coinciden.indexOf(corto) === -1) coinciden.push(corto);
+    });
+    var idxEntorno = -1;
+    if (coinciden.length) {
+      idxEntorno = buenas.push('trae ' + listaNatural(coinciden.slice(0, 2)) + ' (lo que marcaste del entorno)') - 1;
+    }
+
+    // 5. VIS / subsidio. Va de última a propósito: es la única frase sin "y"
+    // interna, y `listaNatural` une el último elemento justamente con " y ".
+    var quiereVis = a.tipo === 'VIS';
+    if (vm.vis === quiereVis) {
+      if (vm.vis && a.afiliado === 'Sí') buenas.push('es VIS con subsidio por tu afiliación a Colsubsidio');
+      else buenas.push('es ' + (vm.vis ? 'VIS' : 'No VIS') + ' como pediste');
+    } else {
+      malas.push('es ' + (vm.vis ? 'VIS' : 'No VIS') + ' cuando buscabas ' + (quiereVis ? 'VIS' : 'No VIS'));
+    }
+
+    // Si la frase del entorno quedó de última (porque la de VIS se fue a las
+    // "malas"), se deja una sola zona: dos encadenarían "… y piscina y sauna".
+    if (idxEntorno > -1 && idxEntorno === buenas.length - 1 && coinciden.length > 1) {
+      buenas[idxEntorno] = 'trae ' + coinciden[0] + ' (lo que marcaste del entorno)';
+    }
+
+    return { buenas: buenas, malas: malas };
+  }
+
+  function razonDeMatch(vm, a, pos) {
+    var f = frasesDeMatch(vm, a);
+    var encabezado = ['Es tu mejor match', 'Segunda mejor opción', 'Tercera mejor opción'][pos] || 'También encaja contigo';
+    var texto = f.buenas.length ? encabezado + ': ' + listaNatural(f.buenas) + '.' : encabezado + '.';
+    if (f.malas.length) texto += ' Eso sí, ' + listaNatural(f.malas) + '.';
+    return texto;
+  }
+
+  function explicar(items, answers) {
+    items.forEach(function (vm, i) {
+      vm.razon = razonDeMatch(vm, answers || {}, i);
+    });
+    return items;
+  }
+
+  // Lo que toda salida tiene que pasar antes de llegar a la pantalla: número
+  // del podio + razón redactada, sin importar de dónde vinieron las tarjetas.
+  function presentar(items, answers) {
+    return explicar(aplicarPodio(items), answers);
   }
 
   function recomendarLocal(answers, cb, extra) {
@@ -111,7 +256,7 @@
       estado: matches.length ? 'listo' : 'vacio',
       aproximado: true,
       leadId: null,
-      items: matches.map(desdeLocal),
+      items: presentar(matches.map(desdeLocal), answers),
       totalCatalogo: (window.GDF.data.PROJECTS || []).length,
       origenCatalogo: 'catálogo real de colsubsidio.com',
       error: null,
@@ -138,9 +283,12 @@
         estado: r.estado, // 'listo' | 'vacio'
         aproximado: false,
         leadId: r.leadId,
-        items: (r.items || []).map(function (item) {
-          return desdeBackend(item, porNombre);
-        }),
+        items: presentar(
+          (r.items || []).map(function (item) {
+            return desdeBackend(item, porNombre);
+          }),
+          state.answers
+        ),
         totalCatalogo: r.totalCatalogo,
         origenCatalogo: r.origenCatalogo,
         error: null,

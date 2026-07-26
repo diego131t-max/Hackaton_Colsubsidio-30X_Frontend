@@ -1941,17 +1941,19 @@ button {
   color: #0067b1;
   line-height: 1;
 }
-/* Señal de demanda real: solo sale en proyectos que están en el Excel de
-   transacciones del reto (ver `transacciones` en js/proyectos.js). */
-.gdf-project-demanda {
-  margin-top: 10px;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #8a6d00;
-  background: #fff8e0;
-  border: 1px solid #ffe36b;
-  border-radius: 8px;
-  padding: 6px 9px;
+/* Por qué el proyecto quedó en esa posición: explica el % del badge. */
+.gdf-project-razon {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #3d4a55;
+  background: #f2f7fb;
+  border-left: 3px solid #0067b1;
+  border-radius: 0 8px 8px 0;
+  padding: 8px 10px;
+}
+.gdf-project-continuar {
+  margin-top: 14px;
 }
 .gdf-project-ficha {
   display: inline-block;
@@ -2583,45 +2585,265 @@ button {
 
 /* ============ CONFIRMACIÓN (cierre del flujo) ============ */
 
+/* Mismo degradado de marca que el hero de landing() (ver
+   design/landing-hero-handoff/README.md → Design Tokens): azul Colsubsidio
+   diluyéndose a blanco. Antes esta pantalla usaba un verde que no es de
+   marca; ahora la última pantalla se ve como el resto de la app. */
 .gdf-confirmacion {
   flex: 1;
   display: flex;
   flex-direction: column;
   padding: 26px 20px 34px;
-  background: linear-gradient(180deg, #eaf7ef, #fff 30%);
+  background: linear-gradient(180deg, #cce1ef 0%, #e4f1fa 42%, #fff 85%);
   overflow-y: auto;
   min-height: 0;
 }
 .gdf-confirm-hero {
   text-align: center;
+  padding: 30px 22px 26px;
+  border-radius: 22px;
   animation: floatUp 0.5s ease-out;
 }
+/* Azul Colsubsidio (#0067B1), no verde: mismo tono que .gdf-lead-badge.ready
+   más abajo en esta misma pantalla, para que ambos bloques de éxito hablen
+   el mismo idioma de color. */
+.gdf-confirm-hero--ok {
+  background: linear-gradient(165deg, #eaf3fa, #dceefc);
+  border: 1.5px solid #a9d4ef;
+}
+.gdf-confirm-hero--cargando {
+  background: linear-gradient(165deg, #f3f5f7, #e9edf1);
+  border: 1.5px solid #dde2e7;
+}
+/* El único bloque que se sale de la paleta de marca a propósito: un error de
+   envío necesita leerse como error (naranja), no como un momento de marca. */
+.gdf-confirm-hero--error {
+  background: linear-gradient(165deg, #fff2ea, #ffe2d0);
+  border: 1.5px solid #ffc7a3;
+}
 .gdf-confirm-icon {
-  width: 62px;
-  height: 62px;
-  margin: 0 auto 14px;
+  width: 78px;
+  height: 78px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Círculo con anillo pulsante detrás del check: el detalle que hace que la
+   pantalla se sienta "terminada" y no un simple mensaje de texto. */
+.gdf-confirm-check {
+  position: relative;
+  width: 66px;
+  height: 66px;
   border-radius: 50%;
-  background: #128c7e;
+  background: linear-gradient(145deg, #0078c8, #0067b1);
   color: #fff;
-  font-size: 32px;
+  font-size: 34px;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 10px 24px rgba(0, 103, 177, 0.35);
   animation: popIn 0.5s ease-out;
 }
+.gdf-confirm-check::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 2px solid #5aa8db;
+  animation: confirmRing 1.8s ease-out infinite;
+}
+.gdf-confirm-check.err {
+  background: linear-gradient(145deg, #ff9a52, #e8722a);
+  box-shadow: 0 10px 24px rgba(232, 114, 42, 0.35);
+}
+.gdf-confirm-check.err::before {
+  display: none;
+}
+.gdf-confirm-spinner {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 4px solid #d7dde2;
+  border-top-color: #0067b1;
+  animation: jibSpin 0.8s linear infinite;
+}
 .gdf-confirm-hero h2 {
-  font-size: 25px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 24px;
   font-weight: 800;
-  color: #1f5c46;
-  line-height: 1.15;
+  color: #003f6b;
+  line-height: 1.2;
+}
+.gdf-confirm-hero--cargando h2 {
+  color: #4a5560;
+}
+.gdf-confirm-hero--error h2 {
+  color: #9a4a1e;
 }
 .gdf-confirm-hero p {
   margin-top: 10px;
   font-size: 14px;
   line-height: 1.55;
-  color: #4a6b5e;
+  color: #3d6a82;
 }
+.gdf-confirm-hero--cargando p {
+  color: #6a7580;
+}
+.gdf-confirm-hero--error p {
+  color: #8a5230;
+}
+.gdf-confirm-hero p strong {
+  color: inherit;
+}
+.gdf-confirm-retry {
+  margin-top: 16px;
+  max-width: 260px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Tarjeta del proyecto elegido: foto real si el catálogo local la tiene
+   (mismo criterio que projectCard en la pantalla anterior). */
+.gdf-confirm-proyecto {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid #e6e7e9;
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+}
+.gdf-confirm-foto {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+}
+.gdf-confirm-proyecto-nombre {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  color: #33322f;
+}
+.gdf-confirm-proyecto-loc {
+  font-size: 12px;
+  color: #8a8a89;
+  margin-top: 2px;
+}
+.gdf-confirm-proyecto-precio {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0067b1;
+  margin-top: 4px;
+}
+
+/* Tarjeta de contacto: nombra el canal real (una llamada) y el número
+   exacto, para que la promesa de "te contactamos" no quede en abstracto. */
+.gdf-confirm-contacto {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  background: #fff;
+  border: 1px solid #bfdcf0;
+  border-radius: 16px;
+  padding: 13px 15px;
+}
+.gdf-confirm-contacto-avatar {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #eaf3fa;
+  border: 1px solid #bfdcf0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.gdf-confirm-contacto-titulo {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #575756;
+  line-height: 1.4;
+}
+.gdf-confirm-contacto-tel {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0067b1;
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+/* Línea de tiempo "Qué sigue": lo que convierte el mensaje de gracias en un
+   proceso real y verificable, no solo una promesa suelta. */
+.gdf-confirm-pasos {
+  margin-top: 22px;
+}
+.gdf-confirm-pasos h3 {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8a8a89;
+  margin-bottom: 12px;
+}
+.gdf-paso {
+  position: relative;
+  display: flex;
+  gap: 13px;
+  padding-bottom: 18px;
+}
+.gdf-paso:last-child {
+  padding-bottom: 0;
+}
+/* La línea conecta el CENTRO de un número con el centro del siguiente. */
+.gdf-paso:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 26px;
+  bottom: -2px;
+  width: 2px;
+  background: #dfe6ea;
+}
+.gdf-paso-num {
+  position: relative;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #0067b1;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gdf-paso-texto {
+  display: flex;
+  flex-direction: column;
+  padding-top: 2px;
+}
+.gdf-paso-texto b {
+  font-size: 13.5px;
+  color: #33322f;
+}
+.gdf-paso-texto span {
+  font-size: 12px;
+  color: #8a8a89;
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
 .gdf-confirm-bloque {
   margin-top: 22px;
 }
@@ -2632,24 +2854,6 @@ button {
   text-transform: uppercase;
   color: #8a8a89;
   margin-bottom: 10px;
-}
-.gdf-confirm-lista {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.gdf-confirm-lista li {
-  background: #fff;
-  border: 1px solid #e6e7e9;
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #575756;
-}
-.gdf-confirm-lista li b {
-  color: #33322f;
 }
 
 /* ============ PANEL DE DEPURACIÓN (#debug) ============ */
@@ -2808,6 +3012,16 @@ button {
 @keyframes jibSpin {
   to {
     transform: rotate(360deg);
+  }
+}
+@keyframes confirmRing {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
   }
 }
 @keyframes floatUp {

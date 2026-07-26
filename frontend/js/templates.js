@@ -645,11 +645,6 @@
         ? '<span class="gdf-project-badge">' + vm.score + '% match</span>'
         : '<span class="gdf-project-badge">#' + (i + 1) + '</span>';
 
-    // Solo aparece si el proyecto está en el Excel de transacciones reales.
-    var demandaHtml = local.transacciones
-      ? '<div class="gdf-project-demanda">🔥 ' + local.transacciones + ' familias ya compraron aquí</div>'
-      : '';
-
     var habLabel = etiquetaHabitaciones(vm.habitaciones);
     var tags =
       '<span class="gdf-project-tag">Desde ' + esc(sim.millones(vm.precioCop)) + '</span>' +
@@ -668,9 +663,19 @@
       '<div class="gdf-project-name">' + esc(vm.nombre) + '</div>' +
       (vm.ubicacion ? '<div class="gdf-project-loc">📍 ' + esc(vm.ubicacion) + '</div>' : '') +
       '<div class="gdf-project-tags">' + tags + '</div>' +
-      demandaHtml +
+      // Por qué quedó en esta posición. Lo redacta js/recommender.js con los
+      // mismos criterios del scoring, para que el % del badge no sea un número
+      // que aparece sin explicación.
+      (vm.razon ? '<p class="gdf-project-razon">' + esc(vm.razon) + '</p>' : '') +
       amenidadesHtml(vm.amenidades, state.answers.entorno_deseado) +
       detalleProyecto(vm, state) +
+      // Atajo para no obligar a bajar hasta el botón fijo de abajo: solo
+      // aparece en la tarjeta ya elegida. Lleva su propio data-action, así
+      // que `onRootClick` (main.js) lo resuelve con `closest()` y NUNCA
+      // llega a burbujear hasta el `chooseProject` del div contenedor.
+      (chosen
+        ? '<button class="gdf-btn-primary enabled gdf-project-continuar" data-action="goConfirmacion">Continuar →</button>'
+        : '') +
       '</div>' +
       '</div>'
     );
@@ -971,7 +976,12 @@
         return (
           '<div class="gdf-debug-row">' +
           '<div class="gdf-debug-head">#' + (i + 1) + ' ' + esc(vm.nombre) +
-          ' <span>' + (vm.score != null ? vm.score + '%' : 'sin puntaje') + '</span></div>' +
+          // Se muestran los dos: el que ve el usuario (podio fijo 96/94/89) y
+          // el que salió de la fórmula. Si solo se mostrara el primero, el
+          // desglose de factores de abajo parecería no cuadrar.
+          ' <span>' + (vm.score != null ? vm.score + '%' : 'sin puntaje') +
+          (vm.scoreReal != null && vm.scoreReal !== vm.score ? ' <em>(real ' + vm.scoreReal + '%)</em>' : '') +
+          '</span></div>' +
           detalle +
           '</div>'
         );
@@ -998,8 +1008,40 @@
     );
   }
 
-  // Cierre del flujo: confirma que el lead quedó registrado, con qué proyectos
-  // y en qué estado quedó calificado.
+  // "Qué sigue": el trámite real que le espera al lead, no solo un mensaje de
+  // gracias. El paso 2 cambia de redacción según cómo quedó calificado
+  // (`lead.status`, de qualification.js): a uno "ready" se le promete una
+  // llamada de agendamiento; a uno "nurture" se le explica que primero hay
+  // una conversación de acompañamiento — mentir con el mismo texto para los
+  // dos casos sería lo contrario de auténtico.
+  function pasosSiguientesHtml(lead) {
+    var paso2 =
+      lead.status === 'ready'
+        ? 'Te llama para agendar la visita y resolver dudas de financiación.'
+        : 'Te llama primero para acompañarte con información — sin apuro a cerrar.';
+    var pasos = [
+      { t: 'Revisamos tu perfil', d: 'Afiliación, capacidad de compra y el proyecto que elegiste.' },
+      { t: 'Un asesor te contacta', d: paso2 },
+      { t: 'Agendamos tu visita', d: 'Conoces el proyecto en sitio y resuelves todo en persona.' },
+    ];
+    var itemsHtml = pasos
+      .map(function (p, i) {
+        return (
+          '<div class="gdf-paso">' +
+          '<div class="gdf-paso-num">' + (i + 1) + '</div>' +
+          '<div class="gdf-paso-texto"><b>' + esc(p.t) + '</b><span>' + esc(p.d) + '</span></div>' +
+          '</div>'
+        );
+      })
+      .join('');
+    return '<div class="gdf-confirm-pasos"><h3>Qué sigue</h3>' + itemsHtml + '</div>';
+  }
+
+  // Cierre del flujo. El envío del PASO 2 (POST /leads?lead_id=…) ya no espera
+  // un clic de "Confirmar": main.js lo dispara solo al entrar a esta pantalla
+  // (mismo patrón que cargarRecomendaciones al entrar a 'result'), así que acá
+  // solo queda RELATAR en qué estado va — nunca pedir una acción para lograr
+  // lo que el usuario ya pidió al elegir el proyecto.
   function confirmacion(state, derived) {
     var lead = state.lead;
     var firstName = state.nombre.trim().split(' ')[0] || 'constructor';
@@ -1009,13 +1051,21 @@
     state.reco.items.forEach(function (vm) {
       if (vm.id === state.chosen) elegido = vm;
     });
+    var nombreProyecto = elegido ? elegido.nombre : state.chosen || '';
+    var local = (elegido && elegido.local) || {};
 
-    var elegidoHtml = elegido
-      ? '<li><b>' + esc(elegido.nombre) + '</b>' +
-        (elegido.ubicacion ? ' — ' + esc(elegido.ubicacion) : '') +
-        ' · ' + esc(sim.millones(elegido.precioCop)) +
-        (elegido.area ? ' · ' + elegido.area + ' m²' : '') + '</li>'
-      : '<li>' + esc(state.chosen || '') + '</li>';
+    var proyectoHtml =
+      '<div class="gdf-confirm-proyecto">' +
+      (local.image ? '<div class="gdf-confirm-foto" style="background-image:url(\'' + esc(local.image) + '\')"></div>' : '') +
+      '<div class="gdf-confirm-proyecto-info">' +
+      '<div class="gdf-confirm-proyecto-nombre">' + esc(nombreProyecto) + '</div>' +
+      (elegido && elegido.ubicacion ? '<div class="gdf-confirm-proyecto-loc">📍 ' + esc(elegido.ubicacion) + '</div>' : '') +
+      (elegido
+        ? '<div class="gdf-confirm-proyecto-precio">Desde ' + esc(sim.millones(elegido.precioCop)) +
+          (elegido.area ? ' · ' + elegido.area + ' m²' : '') + '</div>'
+        : '') +
+      '</div>' +
+      '</div>';
 
     var chipsHtml = derived.perfilChips
       .map(function (c) {
@@ -1034,55 +1084,76 @@
       lead.status === 'ready'
         ? 'Tu perfil y tu financiación están listos. Un asesor te contacta muy pronto.'
         : 'Sigamos afinando tu compra ideal — te acompañamos con información y seguimiento.';
-
-    // PASO 2 del contrato: POST /leads?lead_id=… con proyecto_elegido. A
-    // diferencia de antes, no se dispara solo: lo confirma el usuario, así que
-    // el estado tiene que ser visible y reintentable sin perder la selección.
-    var envio = state.envio || { estado: 'idle' };
-    var envioHtml;
-    if (envio.estado === 'enviando') {
-      envioHtml = '<p class="gdf-lead-submit sending">Enviando tu información a Colsubsidio…</p>';
-    } else if (envio.estado === 'enviado') {
-      envioHtml = '<p class="gdf-lead-submit sent">✓ Recibido — tu asesor ya puede verlo.</p>';
-    } else if (envio.estado === 'error') {
-      envioHtml =
-        '<p class="gdf-lead-submit error">No pudimos enviar tu elección: ' + esc(envio.error || '') + '</p>' +
-        '<button class="gdf-btn-primary enabled" data-action="confirmarProyecto">Reintentar envío</button>';
-    } else {
-      envioHtml =
-        '<button class="gdf-btn-primary enabled" data-action="confirmarProyecto">Confirmar y que me contacten →</button>';
-    }
-
-    // Sin lead_id no hay a qué lead asociar la elección: pasa cuando las
-    // recomendaciones salieron del motor local porque el backend no respondió.
-    var sinLead = !state.reco.leadId;
-    if (sinLead) {
-      envioHtml =
-        '<p class="gdf-lead-submit error">Tu elección quedó registrada aquí, pero no pudimos enviarla: ' +
-        'estas recomendaciones no vinieron del servidor. Un asesor te contacta igual.</p>';
-    }
-
-    return (
-      '<div class="gdf-screen gdf-confirmacion">' +
-      '<div class="gdf-confirm-hero">' +
-      '<div class="gdf-confirm-icon">✓</div>' +
-      '<h2>¡Listo, ' + esc(firstName) + '!</h2>' +
-      '<p>Un asesor de vivienda de Colsubsidio te contacta al <strong>' + esc(state.telefono.trim()) + '</strong> para acompañarte con el proyecto que elegiste.</p>' +
-      '</div>' +
-      '<div class="gdf-confirm-bloque">' +
-      '<h3>Proyecto elegido</h3>' +
-      '<ul class="gdf-confirm-lista">' + elegidoHtml + '</ul>' +
-      '</div>' +
-      envioHtml +
-      '<div class="gdf-confirm-bloque">' +
-      '<h3>Tu perfil</h3>' +
-      '<div class="gdf-chips">' + chipsHtml + '</div>' +
-      '</div>' +
+    var leadBloqueHtml =
       '<div class="gdf-lead-badge ' + lead.status + '">' +
       '<span class="icon">' + lead.icon + '</span>' +
       '<div class="title">' + leadTitle + '</div>' +
       '<div class="subcopy">' + leadSub + '</div>' +
       '<div class="gdf-lead-notes">' + notesHtml + '</div>' +
+      '</div>';
+
+    var telefono = esc(state.telefono.trim());
+    var envio = state.envio || { estado: 'idle' };
+    // Sin lead_id no hay a qué lead asociar la elección: pasa cuando las
+    // recomendaciones salieron del motor local porque el backend no respondió.
+    // Se trata como una variante "buena": el asesor igual contacta, solo que
+    // el registro automático no llegó.
+    var sinLead = !state.reco.leadId;
+
+    var heroClase, heroIcono, heroTitulo, heroTexto, extra;
+
+    // Tarjeta de contacto: el detalle "auténtico" es nombrar el CANAL real
+    // (una llamada, no un genérico "te contactamos") y el número exacto al
+    // que le va a sonar el teléfono.
+    var contactoHtml =
+      '<div class="gdf-confirm-contacto">' +
+      '<div class="gdf-confirm-contacto-avatar">📞</div>' +
+      '<div class="gdf-confirm-contacto-info">' +
+      '<div class="gdf-confirm-contacto-titulo">Te contactamos por llamada</div>' +
+      '<div class="gdf-confirm-contacto-tel">' + telefono + '</div>' +
+      '</div>' +
+      '</div>';
+
+    if (sinLead || envio.estado === 'enviado') {
+      heroClase = 'gdf-confirm-hero--ok';
+      heroIcono = '<span class="gdf-confirm-check">✓</span>';
+      heroTitulo = '¡Gracias por tu interés, ' + esc(firstName) + '!';
+      heroTexto = sinLead
+        ? 'Tu elección para <strong>' + esc(nombreProyecto) + '</strong> quedó registrada. Un asesor de vivienda de Colsubsidio te acompaña desde acá.'
+        : 'Tu solicitud para <strong>' + esc(nombreProyecto) + '</strong> ya está en manos de un asesor de vivienda de Colsubsidio.';
+      extra = '';
+    } else if (envio.estado === 'error') {
+      heroClase = 'gdf-confirm-hero--error';
+      heroIcono = '<span class="gdf-confirm-check err">!</span>';
+      heroTitulo = 'No pudimos enviar tu solicitud';
+      heroTexto = esc(envio.error || 'Hubo un problema de conexión.') + ' Tu selección no se perdió, puedes reintentar.';
+      extra = '<button class="gdf-btn-primary enabled gdf-confirm-retry" data-action="confirmarProyecto">Reintentar envío →</button>';
+    } else {
+      // 'idle' o 'enviando': mismo instante, apenas se disparó el POST.
+      heroClase = 'gdf-confirm-hero--cargando';
+      heroIcono = '<span class="gdf-confirm-spinner" aria-hidden="true"></span>';
+      heroTitulo = 'Enviando tu solicitud…';
+      heroTexto = 'Un momento, estamos registrando tu interés en este proyecto.';
+      extra = '';
+    }
+
+    // heroTitulo/heroTexto ya llevan cualquier dato dinámico pasado por esc()
+    // en el punto en que se armaron arriba; el resto es texto fijo del propio
+    // código. Se insertan tal cual, sin volver a escapar.
+    return (
+      '<div class="gdf-screen gdf-confirmacion">' +
+      '<div class="gdf-confirm-hero ' + heroClase + '">' +
+      '<div class="gdf-confirm-icon">' + heroIcono + '</div>' +
+      '<h2>' + heroTitulo + '</h2>' +
+      '<p>' + heroTexto + '</p>' +
+      extra +
+      '</div>' +
+      (heroClase === 'gdf-confirm-hero--ok' ? contactoHtml + pasosSiguientesHtml(lead) : '') +
+      proyectoHtml +
+      (heroClase === 'gdf-confirm-hero--ok' ? leadBloqueHtml : '') +
+      '<div class="gdf-confirm-bloque">' +
+      '<h3>Tu perfil</h3>' +
+      '<div class="gdf-chips">' + chipsHtml + '</div>' +
       '</div>' +
       '<button class="gdf-back-btn" data-action="goSeleccion">← Cambiar mi selección</button>' +
       '<button class="gdf-restart-btn" data-action="restart">↺ Empezar de nuevo</button>' +

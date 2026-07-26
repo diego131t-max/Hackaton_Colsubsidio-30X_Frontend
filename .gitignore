@@ -15,6 +15,11 @@ dist/
 build/
 .next/
 .vite/
+# Cache local de frontend/tools/scrape_proyectos.py (volcado crudo de fichas
+# y polígonos de localidades) — pesa varios MB y se regenera con un re-scrape,
+# no debe versionarse.
+frontend/tools/.cache_fichas.json
+frontend/tools/.cache_localidades.json
 # Artefactos de build de TypeScript
 *.tsbuildinfo
 # vite.config.ts emitido por tsc -b (composite)

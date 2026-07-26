@@ -129,11 +129,21 @@
     // para que un re-render posterior — marcar el proyecto, por ejemplo — los
     // vuelva a pintar como estaban. No se despacha por el listener delegado
     // porque 'toggle' no es un clic.
+    //
+    // Además funcionan como ACORDEÓN: abrir el plano de un proyecto cierra el
+    // del anterior. Con seis desplegables abiertos a la vez (cada uno con sus
+    // planos y su simulador) la lista se volvía kilométrica y se perdía la
+    // referencia de qué se estaba comparando. Cerrar el otro dispara su propio
+    // 'toggle', así que `detalleAbierto` queda al día sin tocarlo aquí.
     var detalles = root.querySelectorAll('.gdf-project-detalle');
     for (var d = 0; d < detalles.length; d++) {
       (function (el) {
         el.addEventListener('toggle', function () {
           state.detalleAbierto[el.dataset.proyecto] = el.open;
+          if (!el.open) return;
+          for (var o = 0; o < detalles.length; o++) {
+            if (detalles[o] !== el && detalles[o].open) detalles[o].open = false;
+          }
         });
       })(detalles[d]);
     }
@@ -219,6 +229,15 @@
     // ese es el primer momento en que existen TODOS los campos requeridos.
     if (prevScreen !== 'result' && state.screen === 'result') {
       cargarRecomendaciones();
+    }
+
+    // PASO 2 del contrato. Ya no hace falta un botón de "Confirmar": elegir el
+    // proyecto y tocar "Continuar" (goConfirmacion) ES la confirmación, así
+    // que el POST /leads se dispara solo al entrar a esta pantalla — misma
+    // idea que el paso 1 con 'result'. La pantalla solo relata en qué estado
+    // va (ver confirmacion() en templates.js).
+    if (prevScreen !== 'confirmacion' && state.screen === 'confirmacion') {
+      confirmarProyecto();
     }
   }
 

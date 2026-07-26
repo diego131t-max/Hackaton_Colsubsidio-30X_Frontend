@@ -8,17 +8,31 @@
 (function () {
   'use strict';
 
+  // Techo de precio (en millones) por rango de ingresos. Vive acá porque es
+  // parte de la fórmula, pero se exporta: recommender.js lo necesita para
+  // redactar la razón de cada recomendación y duplicarlo sería la típica tabla
+  // que se desincroniza a la primera.
+  var BANDA_INGRESOS = { '≤2 SMMLV': 110, '2–4 SMMLV': 170, '4–8 SMMLV': 320, '8+ SMMLV': 600 };
+
+  function bandaDe(a) {
+    return BANDA_INGRESOS[a.ingresos] || 200;
+  }
+
+  function habitacionesPedidas(a) {
+    return a.habitaciones === '3+' ? 3 : parseInt(a.habitaciones || '1', 10);
+  }
+
   function computeMatches(a, limite) {
     var PROJECTS = window.GDF.data.PROJECTS;
     var VECINAS = window.GDF.data.VECINAS;
 
     var wantVis = a.tipo === 'VIS';
-    var need = a.habitaciones === '3+' ? 3 : parseInt(a.habitaciones || '1', 10);
+    var need = habitacionesPedidas(a);
     // La demo es solo de Bogotá: la ubicación que se pide es la LOCALIDAD, no
     // el municipio (esa pregunta ya no existe). `zona` conserva el id viejo
     // para no renombrar la respuesta en todo el flujo.
     var loc = a.zona;
-    var band = ({ '≤2 SMMLV': 110, '2–4 SMMLV': 170, '4–8 SMMLV': 320, '8+ SMMLV': 600 })[a.ingresos] || 200;
+    var band = bandaDe(a);
 
     return PROJECTS.map(function (p) {
       var s = 38;
@@ -82,5 +96,8 @@
   window.GDF = window.GDF || {};
   window.GDF.matching = {
     computeMatches: computeMatches,
+    BANDA_INGRESOS: BANDA_INGRESOS,
+    bandaDe: bandaDe,
+    habitacionesPedidas: habitacionesPedidas,
   };
 })();
