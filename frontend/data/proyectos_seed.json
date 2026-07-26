@@ -1,0 +1,768 @@
+[
+  {
+    "id_proyecto": "COL-001",
+    "nombre_proyecto": "Acanto",
+    "tipo_vivienda": "vis",
+    "localidad": "Bosa",
+    "direccion": "Carrera 95A # 78 Sur, Bosa Recreo",
+    "precio_desde_cop": 240780000,
+    "area_construida_m2": 50.6,
+    "habitaciones_ofrecidas": [
+      3
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "piscina",
+      "zona de lavanderia",
+      "zona bbq",
+      "zona pet",
+      "zona kid",
+      "locales comerciales",
+      "zona fitness",
+      "salon social",
+      "spa mascotas"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/acanto",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-002",
+    "nombre_proyecto": "Álamo Veramonte",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Suba",
+    "direccion": "Calle 153 # 73-32",
+    "precio_desde_cop": 535653000,
+    "area_construida_m2": 60,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona bbq",
+      "salon social",
+      "coworking",
+      "sala vip"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/alamo-veramonte",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-003",
+    "nombre_proyecto": "Araucaria",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Engativá",
+    "direccion": "Centro Comercial Unicentro de Occidente, local 101, carrera 111C # 86-05",
+    "precio_desde_cop": 621700000,
+    "area_construida_m2": 74.01,
+    "habitaciones_ofrecidas": [
+      3
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona bbq",
+      "zona kid",
+      "salon social",
+      "coworking",
+      "gymnasio",
+      "zona verde",
+      "sala de juegos",
+      "pista de trote"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/araucaria",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-004",
+    "nombre_proyecto": "Austro de Cuatro Vientos",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Fontibón",
+    "direccion": "Carrera 68D # 19-38",
+    "precio_desde_cop": 563383190,
+    "area_construida_m2": 68,
+    "habitaciones_ofrecidas": [
+      3
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona bbq",
+      "zona kid",
+      "zona cool",
+      "sala vip",
+      "zona verde"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/austro-cuatro-vientos",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-005",
+    "nombre_proyecto": "Baviera Park",
+    "tipo_vivienda": "vis",
+    "localidad": "Suba",
+    "direccion": "Carrera 52A con calle 176",
+    "precio_desde_cop": 247700000,
+    "area_construida_m2": 36,
+    "habitaciones_ofrecidas": [
+      1
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "salon social",
+      "coworking",
+      "sala vip",
+      "gymnasio",
+      "sala de juegos"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/baviera-park",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-006",
+    "nombre_proyecto": "Calia",
+    "tipo_vivienda": "vis",
+    "localidad": "Suba",
+    "direccion": "Calle 169A # 62-07, Bogotá",
+    "precio_desde_cop": 295000000,
+    "area_construida_m2": 36,
+    "habitaciones_ofrecidas": [
+      1
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona de lavanderia",
+      "zona kid",
+      "salon social",
+      "spa mascotas",
+      "zona cool",
+      "coworking",
+      "sala de juegos",
+      "cancha e padel",
+      "taller de bicicletas"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/calia",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-007",
+    "nombre_proyecto": "Centriko",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Fontibón",
+    "direccion": "Carrera 81B # 17-55, Fontibón",
+    "precio_desde_cop": 511995000,
+    "area_construida_m2": 62.62,
+    "habitaciones_ofrecidas": [
+      3
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "piscina",
+      "zona bbq",
+      "zona pet",
+      "zona fitness",
+      "zona cool",
+      "zona cine",
+      "coworking",
+      "sala vip"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/centriko",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-008",
+    "nombre_proyecto": "Ciudad Jardín",
+    "tipo_vivienda": "vis",
+    "localidad": "Antonio Nariño",
+    "direccion": "Transversal 12C Bis # 13-15",
+    "precio_desde_cop": 239260050,
+    "area_construida_m2": 39.4,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona pet",
+      "zona cool",
+      "coworking",
+      "gymnasio",
+      "parqueadero"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/ciudad-jardin",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-009",
+    "nombre_proyecto": "Connect Living",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Fontibón",
+    "direccion": "Avenida calle 63 # 86-34",
+    "precio_desde_cop": 283875841,
+    "area_construida_m2": 27.5,
+    "habitaciones_ofrecidas": [
+      1
+    ],
+    "amenidades_entorno": [
+      "zona de lavanderia",
+      "zona bbq",
+      "zona fitness",
+      "salon social",
+      "zona cool",
+      "coworking",
+      "gymnasio"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/connect-living",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-010",
+    "nombre_proyecto": "Element 142",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Usaquén",
+    "direccion": "Carrera 23 # 142-03",
+    "precio_desde_cop": 733600000,
+    "area_construida_m2": 57.62,
+    "habitaciones_ofrecidas": [
+      2,
+      3
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "piscina",
+      "zona kid",
+      "zona fitness",
+      "zona cine",
+      "coworking",
+      "sala vip",
+      "cancha e padel"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/element-142",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-011",
+    "nombre_proyecto": "Eskala",
+    "tipo_vivienda": "vis",
+    "localidad": "Puente Aranda",
+    "direccion": "Avenida carrera 50 # 5F-19, Bogotá",
+    "precio_desde_cop": 275268000,
+    "area_construida_m2": 39.69,
+    "habitaciones_ofrecidas": [
+      1,
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "piscina",
+      "zona bbq",
+      "zona kid",
+      "zona fitness",
+      "salon social",
+      "zona cool",
+      "coworking",
+      "sala vip"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/eskala",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-012",
+    "nombre_proyecto": "Florecer",
+    "tipo_vivienda": "vis",
+    "localidad": "Bosa",
+    "direccion": "Carrera 95A # 78 Sur, Bosa Recreo",
+    "precio_desde_cop": 207580000,
+    "area_construida_m2": 42.56,
+    "habitaciones_ofrecidas": [
+      3
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "piscina",
+      "zona de lavanderia",
+      "zona bbq",
+      "zona pet",
+      "zona kid",
+      "locales comerciales",
+      "zona fitness",
+      "salon social",
+      "zona cool"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/florecer",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-013",
+    "nombre_proyecto": "Infinitum Zentral",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Santa Fe",
+    "direccion": "Carrera 8 # 19-41",
+    "precio_desde_cop": 280000000,
+    "area_construida_m2": 36.47,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona pet",
+      "zona cool",
+      "coworking",
+      "gymnasio",
+      "sala de juegos"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/infinitum-zentral",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-014",
+    "nombre_proyecto": "Karakalí",
+    "tipo_vivienda": "vis",
+    "localidad": "Barrios Unidos",
+    "direccion": "Carrera 15 # 63A Bis-40",
+    "precio_desde_cop": 245126700,
+    "area_construida_m2": 26.05,
+    "habitaciones_ofrecidas": [
+      1
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona de lavanderia",
+      "zona bbq",
+      "zona fitness",
+      "zona cool",
+      "coworking",
+      "gymnasio",
+      "zona verde"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/karakali",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-015",
+    "nombre_proyecto": "La Arboleda",
+    "tipo_vivienda": "vis",
+    "localidad": "San Cristóbal",
+    "direccion": "Carrera 15 este 47-02 sur, San Cristóbal sur, junto al patio Gaviotas del SITP Calle 22 sur # 6-41, Bogotá",
+    "precio_desde_cop": 164556600,
+    "area_construida_m2": 38.96,
+    "habitaciones_ofrecidas": [
+      3
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona bbq",
+      "zona kid",
+      "salon social",
+      "gymnasio",
+      "taller de bicicletas"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/arboleda",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-016",
+    "nombre_proyecto": "Las Violetas",
+    "tipo_vivienda": "vis",
+    "localidad": "Usme",
+    "direccion": "Carrera 1 # 65D 58 sur, local 40",
+    "precio_desde_cop": 201458600,
+    "area_construida_m2": 56,
+    "habitaciones_ofrecidas": [
+      3
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona kid",
+      "salon social",
+      "zona cool",
+      "coworking",
+      "gymnasio"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/las-violetas",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-017",
+    "nombre_proyecto": "Los Nogales",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Engativá",
+    "direccion": "Centro Comercial Unicentro de Occidente, local 101, carrera 111C # 86-05",
+    "precio_desde_cop": 532185000,
+    "area_construida_m2": 78.05,
+    "habitaciones_ofrecidas": [
+      3
+    ],
+    "amenidades_entorno": [
+      "zona bbq",
+      "zona kid",
+      "salon social",
+      "zona cool",
+      "coworking",
+      "gymnasio",
+      "parqueadero",
+      "pista de trote",
+      "taller de bicicletas"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/nogales",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-018",
+    "nombre_proyecto": "Lúmina 77",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Chapinero",
+    "direccion": "Sala de negocios, centro Comercial Los Héroes, local 47",
+    "precio_desde_cop": 375000000,
+    "area_construida_m2": 37.95,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona pet",
+      "salon social",
+      "zona cool",
+      "coworking",
+      "zona cafe",
+      "gymnasio",
+      "parqueadero",
+      "zona verde"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/lumina-77",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-019",
+    "nombre_proyecto": "Mirador del Virrey",
+    "tipo_vivienda": "vis",
+    "localidad": "San Cristóbal",
+    "direccion": "Calle 59B sur # 86a-15, Bosa Nova, Bogotá",
+    "precio_desde_cop": 170000000,
+    "area_construida_m2": 35.81,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "salon social",
+      "parqueadero",
+      "taller de bicicletas"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/mirador-virrey",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-020",
+    "nombre_proyecto": "Novum Ricaurte",
+    "tipo_vivienda": "vis",
+    "localidad": "Los Mártires",
+    "direccion": "Calle 10 # 26-22, Los Mártires",
+    "precio_desde_cop": 231200000,
+    "area_construida_m2": 30,
+    "habitaciones_ofrecidas": [
+      1
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona bbq",
+      "zona kid",
+      "salon social",
+      "gymnasio",
+      "zona verde"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/novum-ricaurte",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-021",
+    "nombre_proyecto": "Nuva Park",
+    "tipo_vivienda": "no_vis",
+    "localidad": "Suba",
+    "direccion": "Calle 131 # 52A-90",
+    "precio_desde_cop": 360000000,
+    "area_construida_m2": 36.57,
+    "habitaciones_ofrecidas": [
+      1
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona bbq",
+      "zona kid",
+      "zona fitness",
+      "salon social",
+      "zona cool",
+      "coworking",
+      "gymnasio",
+      "sala de juegos",
+      "pista de trote",
+      "taller de bicicletas",
+      "sauna"
+    ],
+    "aplica_subsidio_caja": false,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/nuva-park",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-022",
+    "nombre_proyecto": "Reserva del Nogal",
+    "tipo_vivienda": "vis",
+    "localidad": "San Cristóbal",
+    "direccion": "Calle 59B sur # 86a-15, Bosa Nova, Bogotá",
+    "precio_desde_cop": 170000000,
+    "area_construida_m2": 35.15,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "salon social",
+      "parqueadero",
+      "taller de bicicletas"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/reserva-nogal",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-023",
+    "nombre_proyecto": "Rosa Violeta",
+    "tipo_vivienda": "vis",
+    "localidad": "Bosa",
+    "direccion": "Calle 57Q sur # 75C-24, al lado del Terminal del Sur",
+    "precio_desde_cop": 214669000,
+    "area_construida_m2": 41,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "piscina",
+      "zona bbq",
+      "coworking",
+      "sala vip",
+      "gymnasio",
+      "sala de juegos"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/rosa-violeta",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-024",
+    "nombre_proyecto": "Senderos de Fontibón",
+    "tipo_vivienda": "vis",
+    "localidad": "Fontibón",
+    "direccion": "Transversal 128 # 17-87",
+    "precio_desde_cop": 217971600,
+    "area_construida_m2": 36,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona kid",
+      "salon social",
+      "sala vip",
+      "sala de juegos"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/senderos-fontibon",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-025",
+    "nombre_proyecto": "Triventto",
+    "tipo_vivienda": "vis",
+    "localidad": "Los Mártires",
+    "direccion": "Diagonal 4A # 15A-16",
+    "precio_desde_cop": 260586000,
+    "area_construida_m2": 38.91,
+    "habitaciones_ofrecidas": [
+      1
+    ],
+    "amenidades_entorno": [
+      "zona de lavanderia",
+      "zona bbq",
+      "zona kid",
+      "locales comerciales",
+      "zona fitness",
+      "coworking",
+      "gymnasio",
+      "sala de juegos",
+      "taller de bicicletas"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/triventto",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-026",
+    "nombre_proyecto": "Udara Samai 72",
+    "tipo_vivienda": "vis",
+    "localidad": "Engativá",
+    "direccion": "calle 72A # 86-26",
+    "precio_desde_cop": 276000000,
+    "area_construida_m2": 36,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "zona bbq",
+      "zona kid",
+      "zona fitness",
+      "zona cine",
+      "coworking",
+      "gymnasio",
+      "pista de trote",
+      "taller de bicicletas"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/udara-samai-72",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-027",
+    "nombre_proyecto": "Urbana 30",
+    "tipo_vivienda": "vis",
+    "localidad": "Puente Aranda",
+    "direccion": "carrera 30 con calle 14, junto al hotel del Sena, costado occidental, sentido norte sur",
+    "precio_desde_cop": 231182000,
+    "area_construida_m2": 22,
+    "habitaciones_ofrecidas": [
+      1
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona kid",
+      "salon social",
+      "zona cool",
+      "sala vip",
+      "sala de juegos"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/urbana-30",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-028",
+    "nombre_proyecto": "Urbania Bio",
+    "tipo_vivienda": "vis",
+    "localidad": "Fontibón",
+    "direccion": "Calle 22A # 130-89",
+    "precio_desde_cop": 217100000,
+    "area_construida_m2": 44.55,
+    "habitaciones_ofrecidas": [
+      3
+    ],
+    "amenidades_entorno": [
+      "piscina",
+      "zona de lavanderia",
+      "zona bbq",
+      "zona pet",
+      "zona kid",
+      "salon social",
+      "zona cool",
+      "zona cine",
+      "coworking",
+      "gymnasio",
+      "taller de bicicletas"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/urbania-bio",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-029",
+    "nombre_proyecto": "Urbania Eco",
+    "tipo_vivienda": "vis",
+    "localidad": "Fontibón",
+    "direccion": "Calle 22A # 130-89",
+    "precio_desde_cop": 220780000,
+    "area_construida_m2": 40.67,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "piscina",
+      "zona de lavanderia",
+      "zona bbq",
+      "zona kid",
+      "locales comerciales",
+      "zona fitness",
+      "zona cine",
+      "coworking",
+      "sala vip"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/urbania-eco",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-030",
+    "nombre_proyecto": "Urbania Terra",
+    "tipo_vivienda": "vis",
+    "localidad": "Fontibón",
+    "direccion": "Calle 22A #130-89",
+    "precio_desde_cop": 262310000,
+    "area_construida_m2": 45.42,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "piscina",
+      "zona bbq",
+      "zona pet",
+      "zona kid",
+      "zona fitness",
+      "zona cool",
+      "zona cine",
+      "coworking",
+      "sala vip"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/urbania-terra",
+    "_direccion_es_aproximada": false
+  },
+  {
+    "id_proyecto": "COL-031",
+    "nombre_proyecto": "Vibo Once",
+    "tipo_vivienda": "vis",
+    "localidad": "Los Mártires",
+    "direccion": "Avenida Caracas # 3-90",
+    "precio_desde_cop": 281300000,
+    "area_construida_m2": 42.03,
+    "habitaciones_ofrecidas": [
+      2
+    ],
+    "amenidades_entorno": [
+      "lobby",
+      "zona bbq",
+      "zona kid",
+      "locales comerciales",
+      "salon social",
+      "coworking",
+      "gymnasio",
+      "sala de juegos"
+    ],
+    "aplica_subsidio_caja": true,
+    "url_ficha": "https://www.colsubsidio.com/vivienda/proyectos/bogota/vibo-once",
+    "_direccion_es_aproximada": false
+  }
+]

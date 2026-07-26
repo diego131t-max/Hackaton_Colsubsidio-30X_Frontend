@@ -78,10 +78,17 @@
     var PROJECTS = window.GDF.data.PROJECTS;
 
     var totalProjects = PROJECTS.length;
-    var bogotaCount = PROJECTS.filter(function (p) { return p.muni === 'Bogotá'; }).length;
     var visCount = PROJECTS.filter(function (p) { return p.vis; }).length;
     var miCasaYaCount = PROJECTS.filter(function (p) { return p.subsidy === 'Mi Casa Ya'; }).length;
-    var cundinamarcaCount = totalProjects - bogotaCount;
+    // La demo es solo de Bogotá: en vez de "cuántos hay en Cundinamarca" (que
+    // ahora sería siempre 0), se muestra en cuántas localidades hay proyectos.
+    var localidadesCount = (function () {
+      var vistas = {};
+      PROJECTS.forEach(function (p) {
+        if (p.localidad) vistas[p.localidad] = true;
+      });
+      return Object.keys(vistas).length;
+    })();
 
     function findProject(name) {
       for (var i = 0; i < PROJECTS.length; i++) {
@@ -181,10 +188,10 @@
     var bentoHtml =
       '<div class="gdf-landing-bento">' +
       bentoCard(tallLeft, true) +
-      statTile('📍', bogotaCount, 'proyectos en Bogotá') +
+      statTile('📍', totalProjects, 'proyectos en Bogotá') +
       statTile('🏷️', visCount, 'proyectos VIS') +
       statTile('💰', miCasaYaCount, 'con Mi Casa Ya') +
-      statTile('🌄', cundinamarcaCount, 'en Cundinamarca') +
+      statTile('🗺️', localidadesCount, 'localidades') +
       bentoCard(tallRight, true, 'Subsidio VIS') +
       '</div>';
 
@@ -350,10 +357,11 @@
   }
 
   // La mayoría de preguntas son grillas de botones (q.options), pero 'edad'
-  // (entero exacto, lo pide el contrato de leads) y 'entorno_deseado' (texto
-  // libre) necesitan un input real en vez de opciones fijas — ver
-  // 'answerQuizNumber'/'answerQuizText' en main.js, que leen el input al
-  // vuelo y despachan 'selectOption' con el valor tipeado.
+  // (entero exacto, lo pide el contrato de leads), 'entorno_deseado'
+  // (checklist desplegable) necesitan un input real en vez de opciones
+  // fijas de un solo valor — ver 'answerQuizNumber'/'answerQuizText'/
+  // 'answerQuizMultiselect' en main.js, que leen el input/checkboxes al
+  // vuelo y despachan 'selectOption' con el valor armado.
   function quiz(state, derived) {
     var q = derived.q;
     var answerAreaHtml = '';
@@ -372,6 +380,25 @@
         '<div class="gdf-quiz-freeform">' +
         '<input class="gdf-input" id="quizTextInput" type="text" placeholder="' + esc(q.placeholder || '') + '" />' +
         '<button class="gdf-btn-primary enabled" data-action="answerQuizText" data-qid="' + q.id + '">Continuar →</button>' +
+        '</div>';
+    } else if (q && q.type === 'multiselect') {
+      var checkItems = q.options
+        .map(function (o) {
+          return (
+            '<label class="gdf-multiselect-item">' +
+            '<input type="checkbox" value="' + esc(o.v) + '" />' +
+            '<span>' + esc(o.label) + '</span>' +
+            '</label>'
+          );
+        })
+        .join('');
+      answerAreaHtml =
+        '<div class="gdf-quiz-freeform">' +
+        '<details class="gdf-multiselect-dropdown" id="quizMultiselect">' +
+        '<summary>Elige las opciones que apliquen</summary>' +
+        '<div class="gdf-multiselect-list">' + checkItems + '</div>' +
+        '</details>' +
+        '<button class="gdf-btn-primary enabled" data-action="answerQuizMultiselect" data-qid="' + q.id + '">Continuar →</button>' +
         '</div>';
     } else if (q) {
       var cols = q.cols || 1;
@@ -437,87 +464,628 @@
       '<div class="gdf-lead-notes">' + notesHtml + '</div>' +
       '</div>';
 
-    var projectsHtml = state.matches
-      .map(function (p) {
-        var chosen = state.chosen === p.name;
-        var ctaLabel = chosen ? '✓ ¡Listo! Vamos a contactarte' : 'Me interesa este';
-        var confirmHtml = chosen
-          ? '<p class="gdf-project-confirm">Guardamos tu perfil y este proyecto. Un asesor de vivienda te escribe al <strong>' + esc(state.telefono) + '</strong>.</p>'
-          : '';
-        var locLabel = p.muni + (p.zona ? ' · ' + p.zona : '');
-        var habLabel = p.hab + (p.hab >= 3 ? '+ hab' : ' hab');
-        var visTagClass = p.vis ? 'vis' : 'novis';
-        // Con foto/plano real (20 de 26 proyectos) la imagen manda y se
-        // quita el emoji decorativo; sin imagen, cae al gradiente + emoji
-        // de siempre. Ver docs/proyectos-imagenes.md.
-        var headerStyle = p.image
-          ? "background:url('" + p.image + "') center/cover no-repeat, " + p.grad
-          : 'background:' + p.grad;
-        var emojiHtml = p.image ? '' : '<span class="emoji">' + p.emoji + '</span>';
-        // Amenidades reales (20 de 26 proyectos, ver docs/proyectos-amenidades.md).
-        // Sin dato → sin fila, no se inventa nada para los otros 6.
-        var amenitiesHtml =
-          p.amenities && p.amenities.length
-            ? '<div class="gdf-project-amenities">' +
-              p.amenities
-                .map(function (key) {
-                  var a = window.GDF.data.AMENITIES[key];
-                  return '<div class="gdf-amenity">' + a.icon + '<span>' + esc(a.label) + '</span></div>';
-                })
-                .join('') +
-              '</div>'
-            : '';
+    var firstName = state.nombre.trim().split(' ')[0] || 'constructor';
+    var reco = state.reco;
 
+    // El cuerpo cambia según en qué punto va el paso 1 del contrato. Solo el
+    // estado 'listo' pinta tarjetas y CTA; los demás explican qué pasó.
+    var cuerpoHtml;
+    if (reco.estado === 'cargando') cuerpoHtml = recoCargando();
+    else if (reco.estado === 'vacio') cuerpoHtml = recoVacio(state);
+    else if (reco.estado === 'error') cuerpoHtml = recoError(reco);
+    else cuerpoHtml = recoLista(state, reco);
+
+    return (
+      '<div class="gdf-screen gdf-result">' +
+      '<div class="gdf-result-head">' +
+      '<div class="eyebrow">TUS PROYECTOS RECOMENDADOS ✦</div>' +
+      '<h2>Esto es lo que encaja contigo,<br>' + esc(firstName) + '</h2>' +
+      '</div>' +
+      '<div class="gdf-chips">' + chipsHtml + '</div>' +
+      cuerpoHtml +
+      '<button class="gdf-restart-btn" data-action="restart">↺ Empezar de nuevo</button>' +
+      '<p class="gdf-disclaimer">Datos de área, habitaciones, baños y precio tomados de las fichas oficiales de cada proyecto en colsubsidio.com. La recomendación es una demostración del reto.</p>' +
+      '</div>'
+    );
+  }
+
+  // --- Los cuatro estados de la pantalla de selección ----------------------
+
+  // Esqueleto de carga. El aviso del servidor dormido aparece solo a los 8s
+  // (lo activa una clase por CSS, sin temporizadores en JS): el plan gratuito
+  // de Render tarda ~25s en despertar y sin explicación parece que se colgó.
+  function recoCargando() {
+    var tarjetas = '';
+    for (var i = 0; i < 6; i++) {
+      tarjetas +=
+        '<div class="gdf-skeleton-card">' +
+        '<div class="gdf-skeleton-header"></div>' +
+        '<div class="gdf-skeleton-body">' +
+        '<div class="gdf-skeleton-linea ancha"></div>' +
+        '<div class="gdf-skeleton-linea media"></div>' +
+        '<div class="gdf-skeleton-tags"><span></span><span></span><span></span></div>' +
+        '</div></div>';
+    }
+    return (
+      '<p class="gdf-match-count">Buscando proyectos para ti…</p>' +
+      '<p class="gdf-reco-lento">El servidor puede tardar unos segundos en despertar la primera vez.</p>' +
+      '<div class="gdf-projects">' + tarjetas + '</div>'
+    );
+  }
+
+  // 200 con lista vacía: el backend respondió bien, simplemente no tiene nada
+  // en esa zona. No es un fallo y no se ofrece "reintentar" — reintentar daría
+  // exactamente lo mismo. Lo accionable es cambiar la zona.
+  function recoVacio(state) {
+    var zona = state.answers.zona || 'tu localidad';
+    return (
+      '<div class="gdf-reco-aviso vacio">' +
+      '<div class="icono">🔍</div>' +
+      '<h3>Sin resultados para ' + esc(zona) + '</h3>' +
+      '<p>No encontramos proyectos disponibles ahí con lo que nos contaste. ' +
+      'Prueba con otra zona o ajusta el presupuesto.</p>' +
+      '<div class="acciones">' +
+      '<button class="gdf-btn-primary enabled" data-action="goBack">← Cambiar mis respuestas</button>' +
+      '<button class="gdf-btn-secundario" data-action="usarLocalAproximado">Ver proyectos parecidos</button>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  // Fallo de red o del servidor. Se distingue a propósito del caso vacío: acá
+  // sí tiene sentido reintentar, y se ofrece la salida por el motor local.
+  function recoError(reco) {
+    return (
+      '<div class="gdf-reco-aviso error">' +
+      '<div class="icono">⚠️</div>' +
+      '<h3>No pudimos traer tus recomendaciones</h3>' +
+      '<p>' + esc(reco.error || 'Hubo un problema de conexión.') + '</p>' +
+      '<div class="acciones">' +
+      '<button class="gdf-btn-primary enabled" data-action="reintentarReco">Reintentar</button>' +
+      '<button class="gdf-btn-secundario" data-action="usarLocalAproximado">Ver recomendaciones aproximadas</button>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  function recoLista(state, reco) {
+    var projectsHtml = reco.items
+      .map(function (vm, i) {
+        return projectCard(vm, state, i);
+      })
+      .join('');
+
+    var elegido = state.chosen;
+    var ctaLabel = elegido ? 'Continuar →' : 'Elige un proyecto para continuar';
+
+    // Cuando las tarjetas salen del motor local hay que decirlo, siempre. Que
+    // el backend esté caído no puede parecer un resultado del modelo.
+    var avisoAprox = reco.aproximado
+      ? '<div class="gdf-reco-banner">Estos proyectos salen de nuestro catálogo local, no del modelo de recomendación. ' +
+        'Son reales, pero el orden es aproximado.</div>'
+      : '';
+
+    return (
+      avisoAprox +
+      '<p class="gdf-match-count">Ordenados por afinidad con tu perfil. Elige el que más te interese.</p>' +
+      debugPanel(state) +
+      '<div class="gdf-projects">' + projectsHtml + '</div>' +
+      '<div class="gdf-seleccion-cta">' +
+      '<button class="gdf-btn-primary' + (elegido ? ' enabled' : '') + '" data-action="goConfirmacion">' + ctaLabel + '</button>' +
+      '</div>'
+    );
+  }
+
+  // "1 hab" · "2 hab" · "1–3 hab" — el backend manda un array de tipologías.
+  function etiquetaHabitaciones(habitaciones) {
+    if (!habitaciones || !habitaciones.length) return null;
+    var min = Math.min.apply(null, habitaciones);
+    var max = Math.max.apply(null, habitaciones);
+    return (min === max ? min : min + '–' + max) + ' hab';
+  }
+
+  // Zonas comunes del proyecto ("Este proyecto cuenta con:" en la ficha real),
+  // con su icono. Las que el usuario pidió en la pregunta de entorno se
+  // resaltan y se ponen de primeras: es lo que hace que esa pregunta sirva
+  // para algo visible, y no solo para el contrato del backend.
+  function amenidadesHtml(amenidades, buscadas) {
+    if (!amenidades || !amenidades.length) return '';
+    var pedidas = buscadas || [];
+
+    var conMarca = amenidades.map(function (a) {
+      return { a: a, coincide: !!a.clave && pedidas.indexOf(a.clave) > -1 };
+    });
+
+    // Las coincidencias primero, el resto en su orden original.
+    conMarca.sort(function (x, y) {
+      return (y.coincide ? 1 : 0) - (x.coincide ? 1 : 0);
+    });
+
+    var items = conMarca
+      .map(function (x) {
+        var ico = x.a.icon
+          ? '<img src="' + esc(x.a.icon) + '" alt="" loading="lazy" />'
+          : '<span class="gdf-amenity-punto">•</span>';
         return (
-          '<div class="gdf-project-card' + (chosen ? ' chosen' : '') + '">' +
-          '<div class="gdf-project-header" style="' + headerStyle + '">' +
-          emojiHtml +
-          '<span class="gdf-project-badge">' + p.score + '% match</span>' +
-          '</div>' +
-          '<div class="gdf-project-body">' +
-          '<div class="gdf-project-name">' + esc(p.name) + '</div>' +
-          '<div class="gdf-project-loc">📍 ' + esc(locLabel) + '</div>' +
-          '<div class="gdf-project-tags">' +
-          '<span class="gdf-project-tag">Desde $' + p.price + 'M</span>' +
-          '<span class="gdf-project-tag">' + p.area + ' m²</span>' +
-          '<span class="gdf-project-tag">' + habLabel + '</span>' +
-          '<span class="gdf-project-tag ' + visTagClass + '">' + esc(p.subsidy) + '</span>' +
-          '</div>' +
-          amenitiesHtml +
-          '<button class="gdf-project-cta' + (chosen ? ' chosen' : '') + '" data-action="chooseProject" data-value="' + esc(p.name) + '">' + ctaLabel + '</button>' +
-          confirmHtml +
-          '</div>' +
+          '<div class="gdf-amenity' + (x.coincide ? ' coincide' : '') + '">' +
+          ico + '<span class="gdf-amenity-label">' + esc(x.a.label) + '</span>' +
+          (x.coincide ? '<span class="gdf-amenity-check" aria-hidden="true">✓</span>' : '') +
           '</div>'
         );
       })
       .join('');
 
-    var firstName = state.nombre.trim().split(' ')[0] || 'constructor';
+    return (
+      '<div class="gdf-project-entorno">' +
+      '<div class="gdf-entorno-titulo">Este proyecto cuenta con</div>' +
+      '<div class="gdf-project-amenities">' + items + '</div>' +
+      '</div>'
+    );
+  }
 
-    // Estado del POST real a nuestro backend de leads (contrato SenalBowl,
-    // ver js/leads.js) — disparado una sola vez al entrar a result() desde
-    // main.js/dispatch(). No bloquea nada de lo anterior (fire-and-forget).
-    var submit = state.leadSubmit || { status: 'idle' };
-    var submitHtml = '';
-    if (submit.status === 'sending') {
-      submitHtml = '<p class="gdf-lead-submit sending">Enviando tu información a Colsubsidio…</p>';
-    } else if (submit.status === 'sent') {
-      submitHtml = '<p class="gdf-lead-submit sent">✓ Recibido — tu asesor ya puede verlo.</p>';
-    } else if (submit.status === 'error') {
-      submitHtml = '<p class="gdf-lead-submit error">No pudimos enviar tu información automáticamente, pero tu carné queda guardado — un asesor te contacta igual.</p>';
+  // Tarjeta de proyecto de la pantalla de selección. Recibe el VIEW-MODEL que
+  // arma js/recommender.js, no un proyecto del catálogo: así da igual si la
+  // recomendación vino del backend o del motor local. `vm.local` es el proyecto
+  // scrapeado equivalente (o null) y es lo que habilita imagen y planos.
+  // Selección ÚNICA — ver 'chooseProject' en state.js.
+  function projectCard(vm, state, i) {
+    var chosen = state.chosen === vm.id;
+    var local = vm.local || {};
+    var sim = window.GDF.simulador;
+
+    var headerStyle = local.image
+      ? "background:url('" + local.image + "') center/cover no-repeat, " + (local.grad || '')
+      : 'background:' + (local.grad || 'linear-gradient(135deg,#0067b1,#4a94cc)');
+    var emojiHtml = local.image ? '' : '<span class="emoji">' + (local.emoji || '🏢') + '</span>';
+
+    // El backend puntúa (match_score); si algún día no lo mandara, se muestra
+    // la posición en vez de un "% match" inventado.
+    var badge =
+      vm.score != null
+        ? '<span class="gdf-project-badge">' + vm.score + '% match</span>'
+        : '<span class="gdf-project-badge">#' + (i + 1) + '</span>';
+
+    // Solo aparece si el proyecto está en el Excel de transacciones reales.
+    var demandaHtml = local.transacciones
+      ? '<div class="gdf-project-demanda">🔥 ' + local.transacciones + ' familias ya compraron aquí</div>'
+      : '';
+
+    var habLabel = etiquetaHabitaciones(vm.habitaciones);
+    var tags =
+      '<span class="gdf-project-tag">Desde ' + esc(sim.millones(vm.precioCop)) + '</span>' +
+      (vm.area ? '<span class="gdf-project-tag">' + vm.area + ' m²</span>' : '') +
+      (habLabel ? '<span class="gdf-project-tag">' + habLabel + '</span>' : '') +
+      (local.banos ? '<span class="gdf-project-tag">' + local.banos + (local.banos === 1 ? ' baño' : ' baños') + '</span>' : '');
+
+    return (
+      '<div class="gdf-project-card' + (chosen ? ' chosen' : '') + '" data-action="chooseProject" data-value="' + esc(vm.id) + '">' +
+      '<div class="gdf-project-header" style="' + headerStyle + '">' +
+      emojiHtml +
+      badge +
+      '<span class="gdf-project-check" aria-hidden="true">' + (chosen ? '✓' : '') + '</span>' +
+      '</div>' +
+      '<div class="gdf-project-body">' +
+      '<div class="gdf-project-name">' + esc(vm.nombre) + '</div>' +
+      (vm.ubicacion ? '<div class="gdf-project-loc">📍 ' + esc(vm.ubicacion) + '</div>' : '') +
+      '<div class="gdf-project-tags">' + tags + '</div>' +
+      demandaHtml +
+      amenidadesHtml(vm.amenidades, state.answers.entorno_deseado) +
+      detalleProyecto(vm, state) +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Desplegable de planos + simulador de pagos (reemplaza al viejo enlace
+  // "Ver ficha oficial" suelto en la tarjeta).
+  //
+  // Todo lo interactivo de acá adentro va con data-action propio; el
+  // <details> lleva data-action="noop" para que un clic dentro NO burbujee
+  // hasta el data-action="chooseProject" de la tarjeta y termine
+  // marcando/desmarcando el proyecto sin querer (applyAction devuelve false
+  // para 'noop', así que tampoco re-renderiza).
+  // ---------------------------------------------------------------------
+
+  function numeroEs(v) {
+    // 50.6 -> "50,6"  ·  46 -> "46"
+    if (v == null) return '—';
+    return String(v).replace('.', ',');
+  }
+
+  function metrica(rotulo, valor) {
+    return '<div class="gdf-tipo-metrica"><span>' + esc(rotulo) + '</span><strong>' + esc(valor) + '</strong></div>';
+  }
+
+  function planosStrip(t) {
+    if (!t.planos || !t.planos.length) return '';
+    var total = t.planos.length;
+    var laminas = t.planos
+      .map(function (pl, i) {
+        // Abre el archivo original en otra pestaña: es el equivalente al
+        // botón "Ampliar" de la ficha real, sin montar un visor propio.
+        var contador = total > 1
+          ? '<span class="gdf-plano-num">' + (i + 1) + ' / ' + total + '</span>'
+          : '';
+        return (
+          '<a class="gdf-plano" href="' + esc(pl.src) + '" target="_blank" rel="noopener">' +
+          '<span class="gdf-plano-lienzo">' +
+          '<img src="' + esc(pl.src) + '" alt="' + esc(pl.alt || pl.desc || 'Plano') + '" loading="lazy" />' +
+          contador +
+          '<span class="gdf-plano-zoom">Ampliar ⤢</span>' +
+          '</span>' +
+          (pl.desc ? '<span class="gdf-plano-desc">' + esc(pl.desc) + '</span>' : '') +
+          '</a>'
+        );
+      })
+      .join('');
+    return (
+      '<div class="gdf-planos">' +
+      '<div class="gdf-planos-strip">' + laminas + '</div>' +
+      (total > 1 ? '<div class="gdf-planos-pista">Desliza para ver los ' + total + ' planos</div>' : '') +
+      '</div>'
+    );
+  }
+
+  function espaciosGrid(t) {
+    if (!t.espacios || !t.espacios.length) return '';
+    var items = t.espacios
+      .map(function (e) {
+        var ico = e.icon
+          ? '<img src="' + esc(e.icon) + '" alt="" loading="lazy" />'
+          : '<span class="gdf-espacio-punto">•</span>';
+        return '<div class="gdf-espacio">' + ico + '<span>' + esc(e.label) + '</span></div>';
+      })
+      .join('');
+    return (
+      '<div class="gdf-tipo-subtitulo">Esta tipología cuenta con:</div>' +
+      '<div class="gdf-espacios">' + items + '</div>'
+    );
+  }
+
+  function tipologiaPanel(vm, t, idx, activo, state) {
+    var sim = window.GDF.simulador;
+
+    // Las dos áreas van lado a lado; el precio va aparte y destacado, porque
+    // es el número que la gente busca primero (y el que alimenta el simulador).
+    var areas =
+      '<div class="gdf-tipo-metricas">' +
+      metrica('Área construida', t.area ? numeroEs(t.area) + ' m²' : '—') +
+      metrica('Área privada', t.areaPrivada ? numeroEs(t.areaPrivada) + ' m²' : '—') +
+      '</div>';
+
+    var precioHtml = t.precio
+      ? '<div class="gdf-tipo-precio">' +
+        '<span class="rotulo">Precio desde</span>' +
+        '<span class="valor">' + esc(sim.millones(t.precio)) + '</span>' +
+        (t.entrega ? '<span class="entrega">Entrega ' + esc(t.entrega) + '</span>' : '') +
+        '</div>'
+      : '';
+
+    return (
+      '<div class="gdf-tipo-panel' + (activo ? ' active' : '') + '" data-panel="' + idx + '">' +
+      planosStrip(t) +
+      areas +
+      precioHtml +
+      espaciosGrid(t) +
+      simuladorBlock(vm, t, state) +
+      '</div>'
+    );
+  }
+
+  // Precio a simular: el de la tipología si la ficha la publica (97 de 106 lo
+  // hacen); si no, el del view-model, que SIEMPRE viene en pesos —también
+  // cuando la recomendación es del backend y no cruza con el catálogo local.
+  function precioParaSimular(vm, t) {
+    if (t && t.precio) return t.precio;
+    return vm.precioCop || 0;
+  }
+
+  function simuladorBlock(vm, t, state) {
+    var sim = window.GDF.simulador;
+    var precio = precioParaSimular(vm, t);
+    if (!precio) return '';
+
+    var cfg = state.simConfig[vm.id] || {};
+    var inicial = cfg.inicial || sim.SUPUESTOS.cuotaInicialDefault;
+    var plazo = cfg.plazo || sim.SUPUESTOS.plazoDefault;
+
+    function segmento(campo, valores, actual, sufijo) {
+      return valores
+        .map(function (v) {
+          return (
+            '<button class="gdf-sim-opt' + (v === actual ? ' active' : '') + '"' +
+            ' data-action="simSet" data-proyecto="' + esc(vm.id) + '"' +
+            ' data-campo="' + campo + '" data-valor="' + v + '">' + v + sufijo + '</button>'
+          );
+        })
+        .join('');
     }
 
     return (
-      sceneBlock(state, derived) +
-      '<div class="gdf-screen gdf-result">' +
-      '<div class="gdf-result-head"><div class="eyebrow">¡TU PLANO ESTÁ LISTO! ✦</div><h2>Tenemos tu hogar,<br>' + esc(firstName) + '</h2></div>' +
-      leadBadgeHtml +
-      submitHtml +
+      '<details class="gdf-sim" data-sim-proyecto="' + esc(vm.id) + '"' +
+      (state.simAbierto[vm.id] ? ' open' : '') + '>' +
+      '<summary><span class="gdf-sim-icon">💰</span>Simular plan de pagos</summary>' +
+      '<div class="gdf-sim-body" data-precio="' + precio + '" data-vis="' + (vm.vis ? 1 : 0) + '"' +
+      ' data-proyecto="' + esc(vm.id) + '">' +
+      '<div class="gdf-sim-campo"><label>Cuota inicial</label>' +
+      '<div class="gdf-sim-seg">' + segmento('inicial', sim.SUPUESTOS.cuotaInicialOpciones, inicial, '%') + '</div>' +
+      '</div>' +
+      '<div class="gdf-sim-campo"><label>Plazo del crédito</label>' +
+      '<div class="gdf-sim-seg">' + segmento('plazo', sim.SUPUESTOS.plazoOpciones, plazo, ' años') + '</div>' +
+      '</div>' +
+      '<div class="gdf-sim-out">' + simuladorResultado(precio, vm.vis, inicial, plazo, state.answers.ingresos) + '</div>' +
+      '<p class="gdf-sim-nota">Estimación con tasa ' +
+      (vm.vis ? sim.SUPUESTOS.tasaEaVis * 100 : sim.SUPUESTOS.tasaEaNoVis * 100).toFixed(1).replace('.', ',') +
+      '% E.A. y SMMLV ' + sim.SUPUESTOS.anioSmmlv + '. No es una cotización ni una aprobación de crédito.</p>' +
+      '</div>' +
+      '</details>'
+    );
+  }
+
+  // Se genera aparte porque main.js la vuelve a llamar al mover los
+  // controles, y reemplaza SOLO este pedazo por DOM directo (sin re-render
+  // completo, que cerraría el desplegable y recargaría las imágenes).
+  function simuladorResultado(precio, vis, inicial, plazo, rangoIngresos) {
+    var sim = window.GDF.simulador;
+    var r = sim.simular({
+      precio: precio,
+      vis: vis,
+      rangoIngresos: rangoIngresos,
+      porcentajeInicial: inicial,
+      plazoAnios: plazo,
+    });
+
+    var filas =
+      '<div class="gdf-sim-fila"><span>Valor de la vivienda</span><strong>' + sim.pesos(r.precio) + '</strong></div>' +
+      '<div class="gdf-sim-fila"><span>Cuota inicial (' + r.porcentajeInicial + '%)</span><strong>' + sim.pesos(r.cuotaInicial) + '</strong></div>' +
+      (r.subsidio
+        ? '<div class="gdf-sim-fila subsidio"><span>Subsidio Mi Casa Ya</span><strong>−' + sim.pesos(r.subsidio) + '</strong></div>' +
+          '<div class="gdf-sim-fila"><span>Ahorro que debes reunir</span><strong>' + sim.pesos(r.ahorroNecesario) + '</strong></div>'
+        : '') +
+      '<div class="gdf-sim-fila"><span>Monto a financiar</span><strong>' + sim.pesos(r.montoCredito) + '</strong></div>';
+
+    var alerta = '';
+    if (r.holgado === false) {
+      alerta =
+        '<div class="gdf-sim-alerta">⚠️ La cuota supera el 30% del ingreso típico de tu rango. ' +
+        'Sube la cuota inicial, alarga el plazo o mira un proyecto de menor valor.</div>';
+    } else if (r.holgado === true) {
+      alerta = '<div class="gdf-sim-alerta ok">✅ La cuota cabe dentro del 30% del ingreso típico de tu rango.</div>';
+    }
+
+    return (
+      '<div class="gdf-sim-cuota">' +
+      '<span class="rotulo">Cuota mensual estimada</span>' +
+      '<span class="valor">' + sim.pesos(r.cuotaMensual) + '</span>' +
+      '<span class="detalle">a ' + r.plazoAnios + ' años</span>' +
+      '</div>' +
+      '<div class="gdf-sim-filas">' + filas + '</div>' +
+      alerta
+    );
+  }
+
+  function detalleProyecto(vm, state) {
+    var local = vm.local || {};
+    var tips = local.tipologias || [];
+    var abierto = !!state.detalleAbierto[vm.id];
+    var fichaHtml = local.url
+      ? '<a class="gdf-project-ficha" href="' + esc(local.url) + '" target="_blank" rel="noopener">Ver ficha oficial en colsubsidio.com ↗</a>'
+      : '';
+
+    // Dos motivos distintos para no tener planos, y conviene no confundirlos:
+    //   - el proyecto SÍ está en nuestro catálogo pero su ficha no publica
+    //     tipologías (20 de los 66);
+    //   - el proyecto viene del catálogo del backend y no lo tenemos scrapeado,
+    //     así que no hay de dónde sacar los planos.
+    // En ambos casos el simulador funciona igual, porque el precio siempre está.
+    if (!tips.length) {
+      var motivo = vm.local
+        ? 'Este proyecto todavía no publica planos por tipología en su ficha oficial.'
+        : 'Aún no tenemos los planos de este proyecto: no está en el catálogo que bajamos de colsubsidio.com.';
+      return (
+        '<details class="gdf-project-detalle"' + (abierto ? ' open' : '') + ' data-action="noop" data-proyecto="' + esc(vm.id) + '">' +
+        '<summary><span class="gdf-detalle-titulo">Simular plan de pagos</span>' +
+        '<span class="gdf-detalle-chevron">▾</span></summary>' +
+        '<div class="gdf-detalle-body">' +
+        '<p class="gdf-detalle-vacio">' + motivo + '</p>' +
+        simuladorBlock(vm, null, state) +
+        fichaHtml +
+        '</div>' +
+        '</details>'
+      );
+    }
+
+    var activa = state.tipologiaActiva[vm.id] || 0;
+    if (activa >= tips.length) activa = 0;
+
+    // Con hasta 11 tipologías (Nuva Park) la fila scrollea; el envoltorio le
+    // pone un degradado al borde derecho para que se note que hay más.
+    var tabsHtml =
+      tips.length > 1
+        ? '<div class="gdf-tipo-tabs-wrap">' +
+          '<div class="gdf-tipo-tabs" role="tablist">' +
+          tips
+            .map(function (t, idx) {
+              return (
+                '<button class="gdf-tipo-tab' + (idx === activa ? ' active' : '') + '"' +
+                ' data-action="verTipologia" data-proyecto="' + esc(vm.id) + '" data-idx="' + idx + '">' +
+                esc(t.nombre) + '</button>'
+              );
+            })
+            .join('') +
+          '</div></div>'
+        : '<div class="gdf-tipo-unica">' + esc(tips[0].nombre) + '</div>';
+
+    var panelesHtml = tips
+      .map(function (t, idx) {
+        return tipologiaPanel(vm, t, idx, idx === activa, state);
+      })
+      .join('');
+
+    var grupo = tips[0].grupo ? esc(tips[0].grupo.toLowerCase()) : 'tipologías';
+    var resumen = tips.length === 1 ? 'Ver plano y simular pagos' : 'Ver ' + tips.length + ' ' + grupo + ' y simular pagos';
+
+    return (
+      '<details class="gdf-project-detalle"' + (abierto ? ' open' : '') + ' data-action="noop" data-proyecto="' + esc(vm.id) + '">' +
+      '<summary><span class="gdf-detalle-titulo">' + esc(resumen) + '</span>' +
+      '<span class="gdf-detalle-chevron">▾</span></summary>' +
+      '<div class="gdf-detalle-body">' +
+      tabsHtml +
+      panelesHtml +
+      fichaHtml +
+      '</div>' +
+      '</details>'
+    );
+  }
+
+  // Panel de depuración: se activa poniendo #debug en la URL. Sirve para ver
+  // POR QUÉ el motor ordenó así, y para comparar contra el clustering cuando
+  // se conecte. No se muestra nunca en el flujo normal.
+  function debugPanel(state) {
+    if (typeof location === 'undefined' || location.hash.indexOf('debug') === -1) return '';
+    var reco = state.reco;
+    var filas = reco.items
+      .map(function (vm, i) {
+        // Solo el motor local explica su puntaje. El backend manda match_score
+        // sin desglose, así que se dice eso en vez de fingir factores.
+        var detalle = (vm.factores || []).length
+          ? '<ul>' +
+            vm.factores
+              .slice()
+              .sort(function (a, b) {
+                return Math.abs(b.puntos) - Math.abs(a.puntos);
+              })
+              .map(function (f) {
+                return (
+                  '<li class="' + (f.puntos >= 0 ? 'pos' : 'neg') + '">' +
+                  '<b>' + (f.puntos > 0 ? '+' : '') + f.puntos + '</b> ' + esc(f.motivo) +
+                  '</li>'
+                );
+              })
+              .join('') +
+            '</ul>'
+          : '<ul><li>El backend no desglosa su match_score.</li>' +
+            (vm.local ? '' : '<li class="neg">Sin equivalente en el catálogo local: no hay planos.</li>') +
+            '</ul>';
+        return (
+          '<div class="gdf-debug-row">' +
+          '<div class="gdf-debug-head">#' + (i + 1) + ' ' + esc(vm.nombre) +
+          ' <span>' + (vm.score != null ? vm.score + '%' : 'sin puntaje') + '</span></div>' +
+          detalle +
+          '</div>'
+        );
+      })
+      .join('');
+
+    var cruzados = reco.items.filter(function (vm) {
+      return !!vm.local;
+    }).length;
+
+    return (
+      '<div class="gdf-debug">' +
+      '<div class="gdf-debug-title">🔍 Depuración del motor de recomendación</div>' +
+      '<div class="gdf-debug-meta">' +
+      'origen: <b>' + esc(reco.items[0] ? reco.items[0].origen : '—') +
+      (reco.aproximado ? ' (aproximado)' : '') + '</b>' +
+      (reco.origenCatalogo ? ' · catálogo: <b>' + esc(reco.origenCatalogo) + '</b>' : '') +
+      (reco.totalCatalogo ? ' (' + reco.totalCatalogo + ')' : '') +
+      (reco.leadId ? ' · lead: <b>' + esc(reco.leadId) + '</b>' : '') +
+      ' · cruzados con el catálogo local: <b>' + cruzados + '/' + reco.items.length + '</b>' +
+      '</div>' +
+      filas +
+      '</div>'
+    );
+  }
+
+  // Cierre del flujo: confirma que el lead quedó registrado, con qué proyectos
+  // y en qué estado quedó calificado.
+  function confirmacion(state, derived) {
+    var lead = state.lead;
+    var firstName = state.nombre.trim().split(' ')[0] || 'constructor';
+
+    var sim = window.GDF.simulador;
+    var elegido = null;
+    state.reco.items.forEach(function (vm) {
+      if (vm.id === state.chosen) elegido = vm;
+    });
+
+    var elegidoHtml = elegido
+      ? '<li><b>' + esc(elegido.nombre) + '</b>' +
+        (elegido.ubicacion ? ' — ' + esc(elegido.ubicacion) : '') +
+        ' · ' + esc(sim.millones(elegido.precioCop)) +
+        (elegido.area ? ' · ' + elegido.area + ' m²' : '') + '</li>'
+      : '<li>' + esc(state.chosen || '') + '</li>';
+
+    var chipsHtml = derived.perfilChips
+      .map(function (c) {
+        return '<span class="gdf-chip' + (c.hi ? ' hi' : '') + '">' + esc(c.text) + '</span>';
+      })
+      .join('');
+
+    var notesHtml = lead.notes
+      .map(function (n) {
+        return '<span class="gdf-lead-note">' + esc(n) + '</span>';
+      })
+      .join('');
+
+    var leadTitle = lead.status === 'ready' ? '¡Listo para hablar con un asesor!' : 'Vamos construyendo tu camino';
+    var leadSub =
+      lead.status === 'ready'
+        ? 'Tu perfil y tu financiación están listos. Un asesor te contacta muy pronto.'
+        : 'Sigamos afinando tu compra ideal — te acompañamos con información y seguimiento.';
+
+    // PASO 2 del contrato: POST /leads?lead_id=… con proyecto_elegido. A
+    // diferencia de antes, no se dispara solo: lo confirma el usuario, así que
+    // el estado tiene que ser visible y reintentable sin perder la selección.
+    var envio = state.envio || { estado: 'idle' };
+    var envioHtml;
+    if (envio.estado === 'enviando') {
+      envioHtml = '<p class="gdf-lead-submit sending">Enviando tu información a Colsubsidio…</p>';
+    } else if (envio.estado === 'enviado') {
+      envioHtml = '<p class="gdf-lead-submit sent">✓ Recibido — tu asesor ya puede verlo.</p>';
+    } else if (envio.estado === 'error') {
+      envioHtml =
+        '<p class="gdf-lead-submit error">No pudimos enviar tu elección: ' + esc(envio.error || '') + '</p>' +
+        '<button class="gdf-btn-primary enabled" data-action="confirmarProyecto">Reintentar envío</button>';
+    } else {
+      envioHtml =
+        '<button class="gdf-btn-primary enabled" data-action="confirmarProyecto">Confirmar y que me contacten →</button>';
+    }
+
+    // Sin lead_id no hay a qué lead asociar la elección: pasa cuando las
+    // recomendaciones salieron del motor local porque el backend no respondió.
+    var sinLead = !state.reco.leadId;
+    if (sinLead) {
+      envioHtml =
+        '<p class="gdf-lead-submit error">Tu elección quedó registrada aquí, pero no pudimos enviarla: ' +
+        'estas recomendaciones no vinieron del servidor. Un asesor te contacta igual.</p>';
+    }
+
+    return (
+      '<div class="gdf-screen gdf-confirmacion">' +
+      '<div class="gdf-confirm-hero">' +
+      '<div class="gdf-confirm-icon">✓</div>' +
+      '<h2>¡Listo, ' + esc(firstName) + '!</h2>' +
+      '<p>Un asesor de vivienda de Colsubsidio te contacta al <strong>' + esc(state.telefono.trim()) + '</strong> para acompañarte con el proyecto que elegiste.</p>' +
+      '</div>' +
+      '<div class="gdf-confirm-bloque">' +
+      '<h3>Proyecto elegido</h3>' +
+      '<ul class="gdf-confirm-lista">' + elegidoHtml + '</ul>' +
+      '</div>' +
+      envioHtml +
+      '<div class="gdf-confirm-bloque">' +
+      '<h3>Tu perfil</h3>' +
       '<div class="gdf-chips">' + chipsHtml + '</div>' +
-      '<p class="gdf-match-count">' + state.matches.length + ' proyectos coinciden con tu perfil</p>' +
-      '<div class="gdf-projects">' + projectsHtml + '</div>' +
+      '</div>' +
+      '<div class="gdf-lead-badge ' + lead.status + '">' +
+      '<span class="icon">' + lead.icon + '</span>' +
+      '<div class="title">' + leadTitle + '</div>' +
+      '<div class="subcopy">' + leadSub + '</div>' +
+      '<div class="gdf-lead-notes">' + notesHtml + '</div>' +
+      '</div>' +
+      '<button class="gdf-back-btn" data-action="goSeleccion">← Cambiar mi selección</button>' +
       '<button class="gdf-restart-btn" data-action="restart">↺ Empezar de nuevo</button>' +
-      '<p class="gdf-disclaimer">Proyectos ilustrativos para demostración. En producción se conectan al catálogo real de vivienda de Colsubsidio y el botón abre WhatsApp con el lead prellenado para el asesor.</p>' +
       '</div>'
     );
   }
@@ -540,6 +1108,9 @@
       case 'result':
         screenHtml = result(state, derived);
         break;
+      case 'confirmacion':
+        screenHtml = confirmacion(state, derived);
+        break;
       default:
         screenHtml = landing(state);
     }
@@ -553,5 +1124,8 @@
   window.GDF.templates = {
     renderApp: renderApp,
     esc: esc,
+    // main.js la usa para repintar SOLO el resultado del simulador cuando se
+    // mueven sus controles, sin re-render de toda la pantalla.
+    simuladorResultado: simuladorResultado,
   };
 })();

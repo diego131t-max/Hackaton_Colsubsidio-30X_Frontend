@@ -18,6 +18,10 @@ body {
 
 #root {
   min-height: 100vh;
+  /* dvh descuenta la barra de URL del navegador móvil, que 100vh ignora (y por
+     eso cortaba el panel por debajo del chrome). Va después como mejora
+     progresiva: los navegadores que no la entiendan se quedan con 100vh. */
+  min-height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: stretch;
@@ -39,10 +43,23 @@ button {
   width: 100%;
   background: #fff;
   min-height: 100vh;
+  min-height: 100dvh; /* ver nota en #root */
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
+}
+
+/* Pantallas CON escena (quiz y result): en móvil hay que ACOTAR el alto, no
+   solo darle un mínimo. Con `min-height` el shell crece cuando el contenido
+   es alto (p. ej. el resultado con sus 3 tarjetas de proyecto), y entonces el
+   panel nunca se ve obligado a encogerse: vuelve a scrollear la página y la
+   casa se va de vista. Con el alto acotado, el panel (min-height:0 +
+   overflow-y:auto) scrollea por dentro y la escena queda fija arriba.
+   El media query de 900px ya acota .gdf-shell para escritorio. */
+.gdf-shell:has(.gdf-scene) {
+  height: 100vh;
+  height: 100dvh;
 }
 
 .gdf-header {
@@ -1161,7 +1178,12 @@ button {
 
 .gdf-scene {
   position: relative;
-  height: 290px;
+  /* En móvil la escena se queda clavada arriba ocupando ~30% del alto real de
+     la pantalla, para que la casa NUNCA salga de vista mientras se responde
+     (con flex:0 0 auto no se encoge; el que scrollea es el panel de abajo).
+     En escritorio el media query de 900px la sobreescribe con height:100%
+     dentro del grid de dos columnas, así que este valor no aplica allá. */
+  height: clamp(180px, 30vh, 290px);
   flex: 0 0 auto;
   background: #eff2f5;
   background-image: repeating-linear-gradient(
@@ -1353,6 +1375,13 @@ button {
   padding: 16px 20px 24px;
   background: #fff;
   overflow-y: auto;
+  /* Mismo motivo que .gdf-hero y .gdf-landing: sin esto el min-height:auto por
+     defecto de un flex item impide que se encoja por debajo de su contenido,
+     así que el overflow-y:auto de arriba NUNCA se activa — el panel crece,
+     empuja el .gdf-shell más allá del viewport y termina scrolleando la PÁGINA
+     entera, arrastrando la escena fuera de vista. Con min-height:0 el scroll
+     ocurre aquí dentro y la casa se queda fija arriba. */
+  min-height: 0;
 }
 .gdf-compat {
   margin-bottom: 14px;
@@ -1408,7 +1437,7 @@ button {
 }
 .gdf-options {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 .gdf-options.cols-1 {
   grid-template-columns: repeat(1, 1fr);
@@ -1436,8 +1465,12 @@ button {
   background: #f7f9fb;
   border: 1.5px solid #e6e7e9;
   border-radius: 14px;
-  padding: 18px 12px;
-  min-height: 52px;
+  /* Compactos a propósito: en móvil el alto es el recurso escaso (ver
+     .gdf-scene). 44px es el mínimo táctil recomendado, así que no bajamos de
+     ahí. El ancho se deja completo — angostarlos empeoraría el área táctil, y
+     en escritorio ya está topado por .gdf-quiz > * { max-width: 560px }. */
+  padding: 13px 10px;
+  min-height: 44px;
   transition: all 0.12s;
   width: 100%;
 }
@@ -1445,7 +1478,7 @@ button {
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
-  padding: 15px 16px;
+  padding: 12px 14px;
 }
 .gdf-opt-btn:hover {
   border-color: #0067b1;
@@ -1457,7 +1490,7 @@ button {
 .gdf-opt-btn .label {
   font-family: 'Poppins', sans-serif;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 15px;
   color: #33322f;
 }
 .gdf-opt-btn .hint {
@@ -1478,12 +1511,71 @@ button {
   cursor: pointer;
 }
 
-/* Preguntas 'number'/'text' del quiz (edad exacta, entorno deseado): mismo
-   input/botón que escarapela, sin grilla de opciones. */
+/* Preguntas 'number'/'text'/'multiselect' del quiz (edad exacta, entorno
+   deseado): mismo input/botón que escarapela, sin grilla de opciones. */
 .gdf-quiz-freeform {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Checklist desplegable de 'entorno_deseado' (<details>/<summary> nativos:
+   no necesita JS para abrir/cerrar ni dispara re-render al marcar
+   casillas — ver 'answerQuizMultiselect' en main.js). */
+.gdf-multiselect-dropdown {
+  border: 1.5px solid #dfe3e8;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.gdf-multiselect-dropdown summary {
+  padding: 13px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #33322f;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.gdf-multiselect-dropdown summary::-webkit-details-marker {
+  display: none;
+}
+.gdf-multiselect-dropdown summary::after {
+  content: '▾';
+  color: #8a8a89;
+  font-size: 12px;
+}
+.gdf-multiselect-dropdown[open] summary {
+  border-bottom: 1px solid #dfe3e8;
+}
+.gdf-multiselect-dropdown[open] summary::after {
+  content: '▴';
+}
+.gdf-multiselect-list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.gdf-multiselect-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 8px;
+  font-size: 14px;
+  color: #575756;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.gdf-multiselect-item:hover {
+  background: #f4f6f8;
+}
+.gdf-multiselect-item input {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  accent-color: #0067b1;
+  cursor: pointer;
 }
 
 /* ============ RESULT ============ */
@@ -1495,6 +1587,10 @@ button {
   padding: 22px 20px 30px;
   background: linear-gradient(180deg, #fff8e0, #fff 24%);
   overflow-y: auto;
+  /* Mismo fix que .gdf-quiz: sin min-height:0 el overflow-y de arriba no se
+     activa y scrollea la página en vez del panel, sacando de vista la casa
+     terminada. */
+  min-height: 0;
 }
 .gdf-result-head {
   text-align: center;
@@ -1623,31 +1719,84 @@ button {
   margin: 6px 0 16px;
 }
 
+/* Al quitarse la casa de esta pantalla sobra ancho: las tarjetas pasan a
+   grid responsivo (1 col en móvil, 2 desde 640px, 3 desde 1100px) en vez de
+   la columna única de antes. auto-fill + minmax evita media queries a mano. */
 .gdf-projects {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 14px;
+}
+@media (min-width: 640px) {
+  .gdf-projects {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    /* Sin esto, abrir el desplegable de planos de UNA tarjeta estira a la
+       altura de esa fila a las tarjetas vecinas, que quedan con un hueco
+       blanco enorme debajo de su contenido. */
+    align-items: start;
+  }
 }
 .gdf-project-card {
   background: #fff;
-  border: 1px solid #e6e7e9;
+  border: 1.5px solid #e6e7e9;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
   animation: floatUp 0.5s ease-out both;
+  /* Toda la tarjeta es el control de selección (data-action en el div). */
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  display: flex;
+  flex-direction: column;
+}
+.gdf-project-card:hover {
+  border-color: #0067b1;
+  transform: translateY(-2px);
 }
 .gdf-project-card.chosen {
   border: 2px solid #128c7e;
   box-shadow: 0 6px 22px rgba(18, 140, 126, 0.2);
 }
 .gdf-project-card:nth-child(1) {
-  animation-delay: 0.05s;
+  animation-delay: 0.04s;
 }
 .gdf-project-card:nth-child(2) {
-  animation-delay: 0.18s;
+  animation-delay: 0.12s;
 }
 .gdf-project-card:nth-child(3) {
-  animation-delay: 0.31s;
+  animation-delay: 0.2s;
+}
+.gdf-project-card:nth-child(4) {
+  animation-delay: 0.28s;
+}
+.gdf-project-card:nth-child(5) {
+  animation-delay: 0.36s;
+}
+.gdf-project-card:nth-child(6) {
+  animation-delay: 0.44s;
+}
+/* Marca de seleccionado, arriba a la izquierda de la foto. */
+.gdf-project-check {
+  position: absolute;
+  top: 10px;
+  left: 11px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  transition: background 0.15s;
+}
+.gdf-project-card.chosen .gdf-project-check {
+  background: #128c7e;
+  border-color: #fff;
 }
 .gdf-project-header {
   height: 96px;
@@ -1699,32 +1848,69 @@ button {
   background: #f4f6f8;
   color: #33322f;
 }
-.gdf-project-tag.vis {
-  background: #fff3b8;
-  color: #8a6d00;
-  border: 1px solid #ffd000;
-}
-.gdf-project-tag.novis {
-  background: #eef0f2;
-  color: #575756;
-  border: 1px solid #e0e1e3;
-}
-
-.gdf-project-amenities {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+/* Zonas comunes del proyecto, con los íconos reales de la ficha. Las que el
+   usuario pidió en la pregunta de entorno van marcadas y de primeras. */
+.gdf-project-entorno {
   margin-top: 13px;
   padding-top: 12px;
   border-top: 1px solid #eef0f2;
 }
+.gdf-entorno-titulo {
+  font-size: 11px;
+  font-weight: 800;
+  color: #33322f;
+  margin-bottom: 8px;
+}
+
+.gdf-project-amenities {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+}
 .gdf-amenity {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  width: 62px;
+  gap: 5px;
+  padding: 8px 4px 7px;
   text-align: center;
+  border: 1px solid #eef0f2;
+  border-radius: 9px;
+  background: #fcfdfd;
+}
+/* Coincide con lo que el usuario pidió: se destaca en el azul de marca. */
+.gdf-amenity.coincide {
+  border-color: #0067b1;
+  background: #eef5fb;
+}
+/* Dentro de los límites de la caja a propósito: con desbordamiento negativo la
+   insignia se salía del grid y en la última columna quedaba recortada por el
+   overflow:hidden de la tarjeta. */
+.gdf-amenity-check {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #0067b1;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gdf-amenity img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  opacity: 0.85;
+}
+.gdf-amenity.coincide img {
+  opacity: 1;
 }
 .gdf-amenity svg {
   width: 20px;
@@ -1732,42 +1918,796 @@ button {
   color: #0067b1;
   flex: none;
 }
-.gdf-amenity span {
-  font-size: 9.5px;
+/* Clase propia y no un `span` a secas: la insignia del check también es un
+   span, y con el selector genérico heredaba el display y el color de la
+   etiqueta — quedaba azul sobre azul, invisible. */
+.gdf-amenity-label {
+  font-size: 9px;
   font-weight: 600;
   color: #575756;
   line-height: 1.25;
+  /* Etiquetas como "Parqueadero para visitantes" se desbordaban. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.gdf-project-cta {
-  width: 100%;
-  margin-top: 14px;
-  border: none;
-  cursor: pointer;
-  background: #0067b1;
-  color: #fff;
-  font-family: 'Poppins', sans-serif;
-  font-weight: 800;
-  font-size: 14px;
-  padding: 12px;
-  border-radius: 11px;
-  transition: background 0.15s;
+.gdf-amenity.coincide .gdf-amenity-label {
+  color: #0067b1;
+  font-weight: 700;
 }
-.gdf-project-cta:active {
-  transform: scale(0.97);
+.gdf-amenity-punto {
+  font-size: 18px;
+  color: #0067b1;
+  line-height: 1;
 }
-.gdf-project-cta.chosen {
-  background: #128c7e;
-}
-.gdf-project-confirm {
+/* Señal de demanda real: solo sale en proyectos que están en el Excel de
+   transacciones del reto (ver `transacciones` en js/proyectos.js). */
+.gdf-project-demanda {
+  margin-top: 10px;
   font-size: 11.5px;
-  color: #2b5c42;
-  background: #e8f5ec;
-  border: 1px solid #b6e0c4;
-  border-radius: 9px;
-  padding: 9px 11px;
-  margin-top: 9px;
+  font-weight: 700;
+  color: #8a6d00;
+  background: #fff8e0;
+  border: 1px solid #ffe36b;
+  border-radius: 8px;
+  padding: 6px 9px;
+}
+.gdf-project-ficha {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0067b1;
+  text-decoration: none;
+}
+.gdf-project-ficha:hover {
+  text-decoration: underline;
+}
+
+/* ============ ESTADOS DE LA PANTALLA DE SELECCIÓN ============
+   La lista solo se pinta cuando el paso 1 (POST /recomendaciones) terminó
+   bien. Los demás estados —cargando, sin resultados, error— tienen su propio
+   bloque para que nunca se confunda "no hay nada en tu zona" con "el servidor
+   se cayó": el primero no se arregla reintentando. */
+
+.gdf-reco-lento {
+  text-align: center;
+  font-size: 11.5px;
+  color: #a0a3a6;
+  margin-bottom: 12px;
+  /* El plan gratuito de Render duerme y la primera llamada tarda ~25s. Este
+     aviso aparece solo si la espera se alarga, para no alarmar de entrada. */
+  opacity: 0;
+  animation: gdfAvisoLento 0.4s ease-out 8s forwards;
+}
+@keyframes gdfAvisoLento {
+  to {
+    opacity: 1;
+  }
+}
+
+.gdf-skeleton-card {
+  background: #fff;
+  border: 1.5px solid #e6e7e9;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.gdf-skeleton-header {
+  height: 96px;
+}
+.gdf-skeleton-body {
+  padding: 14px 16px 16px;
+}
+.gdf-skeleton-linea {
+  height: 12px;
+  border-radius: 6px;
+  margin-bottom: 9px;
+}
+.gdf-skeleton-linea.ancha {
+  width: 72%;
+}
+.gdf-skeleton-linea.media {
+  width: 45%;
+}
+.gdf-skeleton-tags {
+  display: flex;
+  gap: 6px;
+}
+.gdf-skeleton-tags span {
+  height: 20px;
+  width: 52px;
+  border-radius: 999px;
+}
+.gdf-skeleton-header,
+.gdf-skeleton-linea,
+.gdf-skeleton-tags span {
+  background: linear-gradient(90deg, #eef0f2 25%, #e2e5e8 37%, #eef0f2 63%);
+  background-size: 400% 100%;
+  animation: gdfShimmer 1.4s ease-in-out infinite;
+}
+@keyframes gdfShimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+.gdf-reco-aviso {
+  text-align: center;
+  background: #fff;
+  border: 1.5px solid #e6e7e9;
+  border-radius: 16px;
+  padding: 26px 20px;
+  margin-bottom: 16px;
+  animation: floatUp 0.4s ease-out;
+}
+.gdf-reco-aviso .icono {
+  font-size: 34px;
+  line-height: 1;
+}
+.gdf-reco-aviso h3 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: #33322f;
+  margin: 10px 0 6px;
+}
+.gdf-reco-aviso p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #575756;
+  max-width: 380px;
+  margin: 0 auto;
+}
+.gdf-reco-aviso.error {
+  border-color: #ffd000;
+  background: #fffdf3;
+}
+.gdf-reco-aviso .acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  justify-content: center;
+  margin-top: 16px;
+}
+.gdf-reco-aviso .acciones button {
+  width: auto;
+  min-width: 190px;
+}
+
+.gdf-btn-secundario {
+  border: 1.5px solid #dfe3e8;
+  background: #fff;
+  color: #575756;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.gdf-btn-secundario:hover {
+  border-color: #0067b1;
+  color: #0067b1;
+}
+
+/* Aviso permanente cuando las tarjetas NO vienen del modelo. Que el backend
+   esté caído no puede parecer un resultado del recomendador. */
+.gdf-reco-banner {
+  background: #fff3b8;
+  border: 1px solid #ffd000;
+  color: #8a6d00;
+  border-radius: 12px;
+  padding: 10px 13px;
+  font-size: 12px;
   line-height: 1.45;
-  animation: floatUp 0.35s ease-out;
+  margin-bottom: 12px;
+}
+
+
+/* ============ DESPLEGABLE DE PLANOS Y TIPOLOGÍAS ============
+   Vive dentro de la tarjeta de proyecto, que a su vez ES el control de
+   selección. Por eso el <details> lleva data-action="noop" en el HTML: sin
+   eso, abrir los planos marcaría el proyecto sin querer. */
+
+.gdf-project-detalle {
+  margin-top: 12px;
+  border-top: 1px solid #edeff1;
+  /* La tarjeta entera es clickeable (cursor:pointer); acá adentro solo los
+     controles reales deben verse clickeables. */
+  cursor: default;
+}
+.gdf-project-detalle > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 0 2px;
+  cursor: pointer;
+  list-style: none;
+  color: #0067b1;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.gdf-project-detalle > summary::-webkit-details-marker {
+  display: none;
+}
+.gdf-detalle-chevron {
+  transition: transform 0.18s;
+  font-size: 11px;
+}
+.gdf-project-detalle[open] > summary .gdf-detalle-chevron {
+  transform: rotate(180deg);
+}
+.gdf-detalle-body {
+  padding-top: 10px;
+  animation: floatUp 0.28s ease-out;
+}
+.gdf-detalle-vacio {
+  font-size: 12px;
+  color: #8a8a89;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+/* Pestañas Tipo A / Tipo B. Con hasta 11 tipologías en un proyecto (Nuva Park,
+   que las agrupa por torre), la fila scrollea en horizontal en vez de
+   envolverse y crecer sin control. El envoltorio le pone un degradado al borde
+   derecho para que se vea que hay más pestañas. */
+.gdf-tipo-tabs-wrap {
+  position: relative;
+  margin-bottom: 10px;
+}
+.gdf-tipo-tabs-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 8px;
+  width: 26px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 78%);
+}
+.gdf-tipo-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+}
+.gdf-tipo-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Cuando el proyecto tiene una sola tipología no hay nada que elegir: en vez
+   de una pestaña suelta que invita a un clic inútil, se rotula y ya. */
+.gdf-tipo-unica {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #0067b1;
+  background: #eef5fb;
+  border-radius: 999px;
+  padding: 5px 12px;
+  display: inline-block;
+  margin-bottom: 10px;
+}
+.gdf-tipo-tab {
+  flex: 0 0 auto;
+  border: 1.5px solid #dfe3e8;
+  background: #fff;
+  color: #575756;
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+.gdf-tipo-tab:hover {
+  border-color: #0067b1;
+  color: #0067b1;
+}
+.gdf-tipo-tab.active {
+  background: #0067b1;
+  border-color: #0067b1;
+  color: #fff;
+}
+
+.gdf-tipo-panel {
+  display: none;
+}
+.gdf-tipo-panel.active {
+  display: block;
+}
+
+/* Carrusel de planos: scroll horizontal con snap. Sin JS — en móvil se
+   desliza con el dedo y en escritorio con la barra/trackpad. */
+.gdf-planos {
+  border: 1px solid #e6e7e9;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+.gdf-planos-strip {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.gdf-planos-strip::-webkit-scrollbar {
+  display: none;
+}
+.gdf-plano {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  display: block;
+  text-decoration: none;
+}
+/* Los planos son dibujos de línea sobre blanco: el lienzo va blanco (no gris)
+   para que no se vea un marco sucio alrededor del dibujo. */
+.gdf-plano-lienzo {
+  position: relative;
+  display: block;
+  background: #fff;
+  padding: 10px;
+}
+.gdf-plano img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Vienen en proporciones distintas; se acotan para que una lámina muy alta
+     no estire la tarjeta, pero con más aire que antes. */
+  max-height: 300px;
+  object-fit: contain;
+}
+.gdf-plano-num,
+.gdf-plano-zoom {
+  position: absolute;
+  top: 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.gdf-plano-num {
+  left: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #575756;
+  border: 1px solid #e6e7e9;
+}
+.gdf-plano-zoom {
+  right: 10px;
+  background: rgba(51, 50, 47, 0.85);
+  color: #fff;
+}
+.gdf-plano-desc {
+  display: block;
+  padding: 9px 12px 11px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #575756;
+  background: #f7f9fa;
+  border-top: 1px solid #edeff1;
+}
+.gdf-planos-pista {
+  text-align: center;
+  font-size: 10px;
+  color: #a0a3a6;
+  font-weight: 600;
+  padding: 7px 0 8px;
+  background: #f7f9fa;
+  border-top: 1px solid #edeff1;
+}
+
+.gdf-tipo-metricas {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.gdf-tipo-metrica {
+  background: #f4f6f8;
+  border-radius: 10px;
+  padding: 9px 11px;
+}
+.gdf-tipo-metrica span {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8a8a89;
+}
+.gdf-tipo-metrica strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  color: #33322f;
+  margin-top: 2px;
+}
+
+/* El precio va aparte y con más peso: es el dato que más se busca y el que
+   alimenta el simulador de abajo. */
+.gdf-tipo-precio {
+  margin-top: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  flex-wrap: wrap;
+  background: #eef5fb;
+  border: 1px solid #cfe3f3;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.gdf-tipo-precio .rotulo {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #4a7fa5;
+}
+.gdf-tipo-precio .valor {
+  font-family: 'Poppins', sans-serif;
+  font-size: 19px;
+  font-weight: 800;
+  color: #0067b1;
+  line-height: 1;
+}
+.gdf-tipo-precio .entrega {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #575756;
+  background: #fff;
+  border: 1px solid #cfe3f3;
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+
+.gdf-tipo-subtitulo {
+  margin-top: 15px;
+  margin-bottom: 9px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #33322f;
+}
+.gdf-espacios {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 7px;
+}
+.gdf-espacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: center;
+  gap: 5px;
+  padding: 10px 5px 9px;
+  border: 1px solid #edeff1;
+  border-radius: 10px;
+  background: #fcfdfd;
+}
+.gdf-espacio img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  opacity: 0.85;
+}
+.gdf-espacio span {
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: #575756;
+  font-weight: 600;
+  /* Etiquetas como "Zona de ropas independiente" se desbordaban; se acotan a
+     3 líneas y el resto queda con puntos suspensivos. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.gdf-espacio-punto {
+  font-size: 22px;
+  color: #0067b1;
+  line-height: 1;
+}
+
+/* ============ SIMULADOR DE PLAN DE PAGOS ============ */
+
+.gdf-sim {
+  margin-top: 14px;
+  border: 1.5px solid #dfe3e8;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.gdf-sim > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #33322f;
+  background: #fff8e0;
+}
+.gdf-sim > summary::-webkit-details-marker {
+  display: none;
+}
+.gdf-sim[open] > summary {
+  border-bottom: 1px solid #dfe3e8;
+}
+.gdf-sim-icon {
+  font-size: 14px;
+}
+.gdf-sim-body {
+  padding: 12px;
+}
+.gdf-sim-campo {
+  margin-bottom: 11px;
+}
+.gdf-sim-campo label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a8a89;
+  margin-bottom: 5px;
+}
+.gdf-sim-seg {
+  display: flex;
+  gap: 6px;
+}
+.gdf-sim-opt {
+  flex: 1;
+  border: 1.5px solid #dfe3e8;
+  background: #fff;
+  color: #575756;
+  border-radius: 9px;
+  padding: 7px 4px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+.gdf-sim-opt:hover {
+  border-color: #0067b1;
+}
+.gdf-sim-opt.active {
+  background: #0067b1;
+  border-color: #0067b1;
+  color: #fff;
+}
+
+.gdf-sim-cuota {
+  text-align: center;
+  background: linear-gradient(135deg, #0067b1, #4a94cc);
+  color: #fff;
+  border-radius: 12px;
+  padding: 13px 10px;
+  margin-top: 4px;
+}
+.gdf-sim-cuota .rotulo {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.gdf-sim-cuota .valor {
+  display: block;
+  font-family: 'Poppins', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.15;
+  margin: 3px 0 1px;
+}
+.gdf-sim-cuota .detalle {
+  display: block;
+  font-size: 10.5px;
+  opacity: 0.85;
+}
+
+.gdf-sim-filas {
+  margin-top: 10px;
+}
+.gdf-sim-fila {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px dashed #edeff1;
+  font-size: 11.5px;
+}
+.gdf-sim-fila:last-child {
+  border-bottom: none;
+}
+.gdf-sim-fila span {
+  color: #8a8a89;
+}
+.gdf-sim-fila strong {
+  color: #33322f;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.gdf-sim-fila.subsidio strong {
+  color: #128c7e;
+}
+
+.gdf-sim-alerta {
+  margin-top: 9px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.4;
+  background: #fff3b8;
+  color: #8a6d00;
+  border: 1px solid #ffd000;
+}
+.gdf-sim-alerta.ok {
+  background: #e7f6f2;
+  color: #0f6f64;
+  border-color: #a5ddd3;
+}
+.gdf-sim-nota {
+  margin-top: 9px;
+  font-size: 9.5px;
+  line-height: 1.4;
+  color: #a0a3a6;
+}
+
+/* Barra de continuar de la pantalla de selección. Antes iba pegada abajo
+   (sticky) para tenerla siempre a mano, pero tapaba la última tarjeta y se
+   cruzaba con los desplegables de planos: ahora va en el flujo normal, al
+   final de la lista. */
+.gdf-seleccion-cta {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid #eef0f2;
+}
+
+/* ============ CONFIRMACIÓN (cierre del flujo) ============ */
+
+.gdf-confirmacion {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 20px 34px;
+  background: linear-gradient(180deg, #eaf7ef, #fff 30%);
+  overflow-y: auto;
+  min-height: 0;
+}
+.gdf-confirm-hero {
+  text-align: center;
+  animation: floatUp 0.5s ease-out;
+}
+.gdf-confirm-icon {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: #128c7e;
+  color: #fff;
+  font-size: 32px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: popIn 0.5s ease-out;
+}
+.gdf-confirm-hero h2 {
+  font-size: 25px;
+  font-weight: 800;
+  color: #1f5c46;
+  line-height: 1.15;
+}
+.gdf-confirm-hero p {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #4a6b5e;
+}
+.gdf-confirm-bloque {
+  margin-top: 22px;
+}
+.gdf-confirm-bloque h3 {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8a8a89;
+  margin-bottom: 10px;
+}
+.gdf-confirm-lista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gdf-confirm-lista li {
+  background: #fff;
+  border: 1px solid #e6e7e9;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #575756;
+}
+.gdf-confirm-lista li b {
+  color: #33322f;
+}
+
+/* ============ PANEL DE DEPURACIÓN (#debug) ============ */
+/* Solo aparece con #debug en la URL — ver debugPanel() en templates.js. */
+
+.gdf-debug {
+  margin: 14px 0;
+  border: 1.5px dashed #b8bcc0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fbfbfc;
+  font-size: 11.5px;
+}
+.gdf-debug-title {
+  font-weight: 800;
+  color: #33322f;
+  margin-bottom: 4px;
+}
+.gdf-debug-meta {
+  color: #8a8a89;
+  margin-bottom: 10px;
+}
+.gdf-debug-row {
+  border-top: 1px solid #eef0f2;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+.gdf-debug-head {
+  font-weight: 800;
+  color: #0067b1;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.gdf-debug-head span {
+  color: #8a8a89;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.gdf-debug-row ul {
+  list-style: none;
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.gdf-debug-row li {
+  padding: 3px 8px;
+  border-radius: 6px;
+  line-height: 1.35;
+}
+.gdf-debug-row li.pos {
+  background: #e8f5ec;
+  color: #2b5c42;
+}
+.gdf-debug-row li.neg {
+  background: #fdecea;
+  color: #8a3025;
 }
 
 .gdf-restart-btn {
@@ -2115,14 +3055,35 @@ button {
 
   /* aire para el contenido en columnas anchas, sin estirar los controles */
   .gdf-quiz,
-  .gdf-result {
+  .gdf-result,
+  .gdf-confirmacion {
     padding-left: clamp(24px, 3vw, 56px);
     padding-right: clamp(24px, 3vw, 56px);
   }
-  .gdf-quiz > *,
-  .gdf-result > * {
+  .gdf-quiz > * {
     width: 100%;
     max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* La selección ya NO comparte pantalla con la casa, así que se le da más
+     ancho para que quepan 2–3 tarjetas por fila. El texto se mantiene en una
+     medida legible; solo la grilla y su botón aprovechan el ancho completo. */
+  .gdf-result > * {
+    width: 100%;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .gdf-result > .gdf-projects,
+  .gdf-result > .gdf-seleccion-cta,
+  .gdf-result > .gdf-debug {
+    max-width: 1080px;
+  }
+  .gdf-confirmacion > * {
+    width: 100%;
+    max-width: 600px;
     margin-left: auto;
     margin-right: auto;
   }
