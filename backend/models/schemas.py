@@ -27,7 +27,7 @@ from enum import Enum
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # =========================================================================== #
@@ -130,26 +130,56 @@ class SenalBowl(BaseModel):
 class ResultadoCalificacionDapta(BaseModel):
     call_id: str
     call_status: str
-    calificacion_lead: Literal["caliente", "tibio", "frio"]
+    # Opcional: en llamadas sin contestar (no_answer/voicemail) Dapta no produce
+    # calificación. Si viene None, el lead NO avanza a 'asesor' (ver supabase).
+    calificacion_lead: Literal["caliente", "tibio", "frio"] | None = None
 
     # --- Correlación con NUESTRO lead ---------------------------------------- #
-    # El `call_id` de arriba es el id interno de Dapta y NO coincide con nuestro
-    # lead. Para cruzar el resultado con la fila correcta, Manuela devuelve en el
-    # webhook de resultado el `lead_id` (echo del external_lead_id que mandamos en
-    # el disparo) y el `telefono`. El backend correlaciona por lead_id primero y
-    # por teléfono como respaldo (ver supabase_client.guardar_resultado).
+    # El webhook POST-CALL del agente de Dapta NO manda nuestro lead_id: manda el
+    # número del lead en `to_number`. Correlacionamos por teléfono (normalizado a
+    # E.164 contra la columna telefono_e164). Si algún día llega lead_id (flujo
+    # legacy), se prioriza. Ver supabase_client.guardar_resultado.
     lead_id: str | None = None
     external_lead_id: str | None = None  # alias tolerado por si Dapta lo llama así
     telefono: str | None = None
+    to_number: str | None = None   # número del lead en el webhook nativo de Dapta
+    from_number: str | None = None
 
-    # Motivo de desconexión que envía Dapta (no_answer, voicemail, completed…).
-    # Campo extra respecto al contrato original; lo aceptamos para tener contexto.
+    # Motivo de desconexión que envía Dapta (no_answer, voicemail, user_hangup…).
     disconnection_reason: str | None = None
 
     @property
     def lead_id_correlacion(self) -> str | None:
         """Nuestro id de lead, venga como `lead_id` o como `external_lead_id`."""
         return self.lead_id or self.external_lead_id
+
+    @property
+    def telefono_correlacion(self) -> str | None:
+        """Teléfono del lead: `telefono` explícito o `to_number` del webhook nativo."""
+        return self.telefono or self.to_number
+
+    @model_validator(mode="before")
+    @classmethod
+    def _aplanar_formato_nativo_dapta(cls, data: object) -> object:
+        """
+        Acepta el formato NATIVO del webhook post-call del agente de Dapta, donde
+        la calificación va anidada en `call_analysis.custom_analysis_data`. Lo
+        aplana a nuestros campos top-level. El formato plano legacy pasa intacto.
+        """
+        if not isinstance(data, dict):
+            return data
+        analisis = data.get("call_analysis")
+        if not isinstance(analisis, dict):
+            return data
+        aplanado = dict(data)
+        anidados = analisis.get("custom_analysis_data")
+        if isinstance(anidados, dict):
+            for clave, valor in anidados.items():
+                aplanado.setdefault(clave, valor)
+        # to_number es el número del lead -> úsalo como teléfono de correlación.
+        if data.get("to_number") and not aplanado.get("telefono"):
+            aplanado["telefono"] = data["to_number"]
+        return aplanado
 
     # Datos sensibles/financieros finos, capturados en conversación, no en el
     # formulario:
@@ -158,7 +188,7 @@ class ResultadoCalificacionDapta(BaseModel):
     primas_incluidas_plan_pago: bool | None = None
     cesantias_futuras_incluidas: bool | None = None
     disponible_visita: bool | None = None
-    resumen_llamada: str
+    resumen_llamada: str | None = None
 
     # --- Blindaje de contrato (defensa ante lo que mande el agente de voz) --- #
     @field_validator("calificacion_lead", mode="before")

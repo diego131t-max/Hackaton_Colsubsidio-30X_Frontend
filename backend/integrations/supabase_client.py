@@ -17,6 +17,7 @@ from typing import Any
 from uuid import UUID
 
 from backend import config
+from backend.integrations.dapta_client import normalizar_telefono_e164
 from backend.models.schemas import ResultadoCalificacionDapta, SenalBowl
 
 TABLA = "reto_vivienda_leads"
@@ -56,6 +57,8 @@ async def crear_lead(
     fila = {
         "id": str(lead_id),
         "call_id": call_id,
+        # E.164 para correlacionar el resultado de Dapta por `to_number`.
+        "telefono_e164": normalizar_telefono_e164(senal.telefono_movil),
         "canal_origen": canal_origen,
         "nodo_actual": "backend",
         "estado_nodo": "en_proceso",
@@ -93,6 +96,8 @@ async def crear_lead_recomendaciones(
     fila = {
         "id": str(lead_id),
         "call_id": str(lead_id),
+        # E.164 para correlacionar el resultado de Dapta por `to_number`.
+        "telefono_e164": normalizar_telefono_e164(senal.telefono_movil),
         "canal_origen": canal_origen,
         "nodo_actual": "clustering",
         "estado_nodo": "completado",
@@ -143,9 +148,12 @@ def _criterio_correlacion(resultado: ResultadoCalificacionDapta) -> tuple[dict[s
     lead_id = resultado.lead_id_correlacion
     if lead_id:
         return {"id": f"eq.{lead_id}"}, "lead_id"
-    if resultado.telefono:
-        tel = resultado.telefono.strip()
-        return {"senal->>telefono_movil": f"eq.{tel}", "nodo_actual": "eq.dapta"}, "telefono"
+    tel = resultado.telefono_correlacion
+    if tel:
+        # Normaliza a E.164 y cruza contra la columna telefono_e164 (así el
+        # to_number "+573125923915" matchea aunque el form guardara "312 592 3915").
+        tel_e164 = normalizar_telefono_e164(tel)
+        return {"telefono_e164": f"eq.{tel_e164}", "nodo_actual": "eq.dapta"}, "telefono"
     return {"call_id": f"eq.{resultado.call_id}"}, "call_id"
 
 
@@ -167,12 +175,23 @@ async def guardar_resultado(resultado: ResultadoCalificacionDapta) -> dict[str, 
 
     import httpx
 
-    cuerpo = {
-        "nodo_actual": "asesor",
-        "estado_nodo": "completado",
-        "calificacion": resultado.calificacion_lead,
-        "resultado_dapta": resultado.model_dump(),
-    }
+    if resultado.calificacion_lead:
+        # Hubo conversación y calificación -> lo entregamos al asesor humano.
+        cuerpo = {
+            "nodo_actual": "asesor",
+            "estado_nodo": "completado",
+            "calificacion": resultado.calificacion_lead,
+            "resultado_dapta": resultado.model_dump(),
+        }
+    else:
+        # No contestó / buzón: no hay calificación. No avanza a asesor; queda en
+        # 'dapta' con estado 'error' (candidato a seguimiento). El motivo real
+        # (no_answer/voicemail) queda en resultado_dapta.disconnection_reason.
+        cuerpo = {
+            "nodo_actual": "dapta",
+            "estado_nodo": "error",
+            "resultado_dapta": resultado.model_dump(),
+        }
     url = f"{config.SUPABASE_URL}/rest/v1/{TABLA}"
     params, criterio = _criterio_correlacion(resultado)
 
