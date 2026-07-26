@@ -14,6 +14,7 @@ Puede avanzar EN PARALELO con el resto del sistema.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from backend import config
@@ -23,6 +24,35 @@ from backend.models.schemas import (
     ResultadoClustering,
     SenalBowl,
 )
+
+
+def normalizar_telefono_e164(raw: str | None, indicativo: str = "57") -> str | None:
+    """
+    Normaliza un teléfono colombiano a E.164 (+57XXXXXXXXXX) para que la
+    telefonía de Dapta pueda marcar SIN error.
+
+    La marcación saliente exige E.164; si llega el número crudo del formulario
+    ("312 592 3915", "57 3125923915", "+57 312-592-3915", "3125923915") la
+    llamada no conecta. Esta función tolera espacios, guiones, paréntesis y el
+    prefijo, y siempre devuelve "+57" + 10 dígitos del móvil.
+
+    Devuelve el original si no logra interpretarlo (mejor mandar algo que None).
+    """
+    if not raw:
+        return raw
+    digitos = re.sub(r"\D", "", raw)  # solo dígitos: ignora +, espacios, guiones
+    if not digitos:
+        return raw
+    # Ya trae indicativo país (57 + 10 dígitos = 12).
+    if digitos.startswith(indicativo) and len(digitos) == len(indicativo) + 10:
+        return "+" + digitos
+    # Solo el móvil de 10 dígitos (celular colombiano empieza por 3).
+    if len(digitos) == 10:
+        return "+" + indicativo + digitos
+    # Otros largos: respeta el indicativo si ya está, si no lo antepone.
+    if digitos.startswith(indicativo):
+        return "+" + digitos
+    return "+" + indicativo + digitos
 
 
 async def disparar_llamada(
@@ -81,7 +111,8 @@ async def disparar_llamada(
 
     payload_dapta: dict[str, Any] = {
         "nombre": f"{senal.nombre} {senal.apellido}",
-        "telefono": senal.telefono_movil,
+        # E.164 obligatorio para que Dapta pueda marcar (to_number).
+        "telefono": normalizar_telefono_e164(senal.telefono_movil),
         "proyecto": proyecto_interes or proyecto_top,
         "afiliado": senal.afiliado,
         "rango_ingreso": senal.ingresos_hogar_rango,
