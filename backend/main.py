@@ -66,9 +66,13 @@ else:
         "http://localhost:5173",
         "http://localhost:5174",
     ]
+# Además de los orígenes explícitos, permitimos cualquier subdominio *.vercel.app
+# (producción y previews). Vercel genera una URL nueva por deploy/preview, así que
+# fijar una sola rompería en el siguiente push; el regex las cubre todas.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=False,
