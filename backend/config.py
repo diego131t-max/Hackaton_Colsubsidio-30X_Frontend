@@ -37,6 +37,21 @@ DAPTA_LLAMADAS_ACTIVAS: bool = os.environ.get(
 # Si está definido, /webhooks/dapta/resultado exige el header X-Dapta-Secret.
 DAPTA_WEBHOOK_SECRET: str | None = os.environ.get("DAPTA_WEBHOOK_SECRET")
 
+# --- Seguimiento por WhatsApp (agente de texto "Manuela — Seguimiento WhatsApp") --
+# GATED: por defecto APAGADO. Cuando la persona no contesta la llamada, si esto
+# está activo Y configurado, el backend dispara el seguimiento por WhatsApp.
+# Requiere una línea de WhatsApp Business conectada en Dapta (flujo Meta) — hasta
+# entonces queda en no-op y no afecta nada de lo que ya funciona.
+DAPTA_WHATSAPP_ACTIVO: bool = os.environ.get(
+    "DAPTA_WHATSAPP_ACTIVO", "false"
+).strip().lower() in {"1", "true", "yes", "si", "sí"}
+# URL del endpoint de Dapta para iniciar la conversación de WhatsApp del agente.
+DAPTA_WHATSAPP_URL: str | None = os.environ.get("DAPTA_WHATSAPP_URL")
+# x-api-key del endpoint (si aplica).
+DAPTA_WHATSAPP_API_KEY: str | None = os.environ.get("DAPTA_WHATSAPP_API_KEY")
+# Secret key del agente de texto (se obtiene al conectar la línea de WhatsApp).
+DAPTA_WHATSAPP_AGENT_KEY: str | None = os.environ.get("DAPTA_WHATSAPP_AGENT_KEY")
+
 # Origen permitido para CORS (el frontend). TODO(seguridad): aplicarlo.
 FRONTEND_ORIGIN: str = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
 

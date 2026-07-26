@@ -263,6 +263,7 @@ async def _finalizar_lead(lead_id: UUID, senal: SenalBowl) -> None:
 @app.post("/webhooks/dapta/resultado")
 async def webhook_dapta_resultado(
     resultado: ResultadoCalificacionDapta,
+    background: BackgroundTasks,
     x_dapta_secret: str | None = Header(default=None),
 ) -> dict[str, str]:
     """
@@ -280,6 +281,16 @@ async def webhook_dapta_resultado(
 
     # Persistir en Supabase -> el dashboard lo refleja por Realtime.
     resultado_persistencia = await supabase_client.guardar_resultado(resultado)
+
+    # Si NO contestó (sin calificación), dispara el seguimiento por WhatsApp.
+    # GATED: enviar_whatsapp_seguimiento es no-op si WhatsApp no está activo/
+    # configurado, así que esto no afecta el flujo actual mientras no haya línea.
+    if resultado.calificacion_lead is None:
+        background.add_task(
+            dapta_client.enviar_whatsapp_seguimiento, resultado.telefono_correlacion
+        )
+        logger.info("Lead sin contestar (%s): encolado seguimiento WhatsApp (gated).",
+                    resultado.telefono_correlacion)
 
     # Compatibilidad: si había una ficha en memoria, también se completa.
     if len(_fichas_en_proceso) == 1:

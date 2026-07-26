@@ -152,6 +152,59 @@ async def disparar_llamada(
         return {"status": "enviado", "http_status": r.status_code, "respuesta": cuerpo}
 
 
+async def enviar_whatsapp_seguimiento(
+    telefono: str | None,
+    nombre: str | None = None,
+    *,
+    mensaje: str | None = None,
+) -> dict[str, Any]:
+    """
+    Dispara el seguimiento por WhatsApp (agente de texto "Manuela — Seguimiento
+    WhatsApp") cuando la persona NO contestó la llamada de voz.
+
+    GATED y SEGURO: si `DAPTA_WHATSAPP_ACTIVO` está apagado o faltan credenciales,
+    NO hace nada (no-op) y devuelve el motivo — así no rompe el webhook mientras
+    no exista la línea de WhatsApp Business (conectada en Dapta vía Meta).
+
+    Cuando esté activo, POST al endpoint de WhatsApp de Dapta con el mensaje de
+    apertura y el número del lead; a partir de ahí el agente de texto conversa.
+    """
+    if not config.DAPTA_WHATSAPP_ACTIVO:
+        return {"status": "desactivado", "motivo": "DAPTA_WHATSAPP_ACTIVO=false"}
+    if not (config.DAPTA_WHATSAPP_URL and config.DAPTA_WHATSAPP_AGENT_KEY):
+        return {"status": "sin_configurar", "motivo": "falta URL o agent_key de WhatsApp"}
+
+    destino = normalizar_telefono_e164(telefono)
+    if not destino:
+        return {"status": "sin_telefono"}
+
+    saludo = f"Hola {nombre.split()[0]}" if nombre else "Hola"
+    texto = mensaje or (
+        f"{saludo}, soy Manuela de Colsubsidio Vivienda. Dejaste tus datos en "
+        "nuestro formulario pero no pudimos hablar por teléfono. ¿Tienes un "
+        "momento para agendar una asesoría rápida?"
+    )
+    payload = {
+        "role": "user",
+        "source": "whatsapp",
+        "whatsapp_provider": "message_bird",
+        "message": texto,
+        "whatsapp_target": destino,
+        "agent_key": config.DAPTA_WHATSAPP_AGENT_KEY,
+    }
+    headers = (
+        {"x-api-key": config.DAPTA_WHATSAPP_API_KEY}
+        if config.DAPTA_WHATSAPP_API_KEY
+        else {}
+    )
+    import httpx
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        r = await client.post(config.DAPTA_WHATSAPP_URL, json=payload, headers=headers)
+        r.raise_for_status()
+        return {"status": "enviado", "http_status": r.status_code}
+
+
 def recibir_resultado_calificacion(
     payload_de_dapta: dict[str, Any],
 ) -> ResultadoCalificacionDapta:
