@@ -128,10 +128,35 @@ async def actualizar_lead(lead_id: UUID, campos: dict[str, Any]) -> dict[str, An
         return {"estado": "actualizado"}
 
 
+def _criterio_correlacion(resultado: ResultadoCalificacionDapta) -> tuple[dict[str, str], str]:
+    """
+    Decide POR QUÉ campo cruzar el resultado de Dapta con la fila del lead.
+
+    Orden de preferencia (de más a menos confiable):
+      1) lead_id  -> nuestro id de fila (echo del external_lead_id). Único y exacto.
+      2) telefono -> `senal->>telefono_movil`, acotado a los que siguen en 'dapta',
+                     para no pisar leads viejos con el mismo número.
+      3) call_id  -> respaldo legacy (solo sirve si Dapta llegara a devolver
+                     nuestro id como call_id).
+    Devuelve (params_para_postgrest, nombre_del_criterio).
+    """
+    lead_id = resultado.lead_id_correlacion
+    if lead_id:
+        return {"id": f"eq.{lead_id}"}, "lead_id"
+    if resultado.telefono:
+        tel = resultado.telefono.strip()
+        return {"senal->>telefono_movil": f"eq.{tel}", "nodo_actual": "eq.dapta"}, "telefono"
+    return {"call_id": f"eq.{resultado.call_id}"}, "call_id"
+
+
 async def guardar_resultado(resultado: ResultadoCalificacionDapta) -> dict[str, Any]:
     """
-    Actualiza la fila del lead cuyo `call_id` coincide, con la calificación y el
-    resultado de Dapta, avanzándolo a la pieza 'asesor'.
+    Actualiza la fila del lead correlacionado con la calificación y el resultado
+    de Dapta, avanzándolo a la pieza 'asesor'.
+
+    La correlación NO depende del `call_id` de Dapta (que es su id interno, no el
+    nuestro): usa `lead_id` -> `telefono` -> `call_id` en ese orden (ver
+    `_criterio_correlacion`).
 
     Devuelve un dict con el desenlace: {'estado': 'actualizado'|'sin_match'|'omitido'}.
     Nunca lanza hacia el webhook (un error 5xx haría que Dapta reintentara);
@@ -149,12 +174,17 @@ async def guardar_resultado(resultado: ResultadoCalificacionDapta) -> dict[str, 
         "resultado_dapta": resultado.model_dump(),
     }
     url = f"{config.SUPABASE_URL}/rest/v1/{TABLA}"
-    params = {"call_id": f"eq.{resultado.call_id}"}
+    params, criterio = _criterio_correlacion(resultado)
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         r = await client.patch(url, headers=_headers(), params=params, json=cuerpo)
         r.raise_for_status()
         filas = r.json()
         if filas:
-            return {"estado": "actualizado", "filas": len(filas)}
-        return {"estado": "sin_match", "call_id": resultado.call_id}
+            return {"estado": "actualizado", "filas": len(filas), "criterio": criterio}
+        return {
+            "estado": "sin_match",
+            "criterio": criterio,
+            "call_id": resultado.call_id,
+            "lead_id": resultado.lead_id_correlacion,
+        }

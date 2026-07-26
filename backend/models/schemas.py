@@ -132,9 +132,24 @@ class ResultadoCalificacionDapta(BaseModel):
     call_status: str
     calificacion_lead: Literal["caliente", "tibio", "frio"]
 
+    # --- Correlación con NUESTRO lead ---------------------------------------- #
+    # El `call_id` de arriba es el id interno de Dapta y NO coincide con nuestro
+    # lead. Para cruzar el resultado con la fila correcta, Manuela devuelve en el
+    # webhook de resultado el `lead_id` (echo del external_lead_id que mandamos en
+    # el disparo) y el `telefono`. El backend correlaciona por lead_id primero y
+    # por teléfono como respaldo (ver supabase_client.guardar_resultado).
+    lead_id: str | None = None
+    external_lead_id: str | None = None  # alias tolerado por si Dapta lo llama así
+    telefono: str | None = None
+
     # Motivo de desconexión que envía Dapta (no_answer, voicemail, completed…).
     # Campo extra respecto al contrato original; lo aceptamos para tener contexto.
     disconnection_reason: str | None = None
+
+    @property
+    def lead_id_correlacion(self) -> str | None:
+        """Nuestro id de lead, venga como `lead_id` o como `external_lead_id`."""
+        return self.lead_id or self.external_lead_id
 
     # Datos sensibles/financieros finos, capturados en conversación, no en el
     # formulario:
