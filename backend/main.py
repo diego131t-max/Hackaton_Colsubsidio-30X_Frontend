@@ -159,25 +159,90 @@ async def _procesar_lead(lead_id: UUID, senal: SenalBowl) -> None:
 @app.post("/recomendaciones")
 async def recomendaciones(senal: SenalBowl) -> dict:
     """
-    Paso 1 del flujo: recibe el SenalBowl (parte del formulario) y devuelve el
-    Top 6 de inmuebles con match_score, para que el formulario los muestre. NO
-    crea el lead ni dispara Dapta — eso ocurre al confirmar, en POST /leads.
+    Paso 1: recibe el SenalBowl (parte del formulario), CREA el registro temporal
+    del lead en Supabase (el dashboard lo ve entrar), corre el modelo y devuelve
+    `lead_id` + el Top 6 con match_score para que el formulario los muestre.
+
+    El `lead_id` que devuelve se manda luego a `POST /leads?lead_id=...` al
+    confirmar, para completar ESE MISMO registro (no crear uno nuevo).
     """
-    return await recomendaciones_client.recomendar(senal, top=6)
+    lead_id = uuid4()
+    resultado = await recomendaciones_client.recomendar(senal, top=6)
+    proyectos = [r.get("nombre_proyecto", "") for r in resultado["recomendaciones"]]
+    zona = (senal.zona_interes or "").strip().lower()
+    cluster_id = f"{senal.tipo_vivienda}::{zona}" if zona else senal.tipo_vivienda
+
+    try:
+        await supabase_client.crear_lead_recomendaciones(
+            lead_id, senal, cluster_id, proyectos
+        )
+    except Exception:  # noqa: BLE001 - no romper la respuesta por un fallo de I/O
+        logger.exception("No se pudo crear el lead temporal %s en Supabase", lead_id)
+
+    return {"lead_id": str(lead_id), **resultado}
 
 
 @app.post("/leads", status_code=202)
 async def crear_lead(
-    senal: SenalBowl, background: BackgroundTasks
+    senal: SenalBowl, background: BackgroundTasks, lead_id: str | None = None
 ) -> dict[str, str]:
     """
-    Paso final: la persona ya eligió proyecto (senal.proyecto_elegido) y confirma.
-    Valida (Pydantic -> 422 si no matchea el contrato), encola el pipeline y
-    responde de inmediato con el lead_id.
+    Paso final (confirmación). Dos modos:
+      - Con `?lead_id=...` (viene de /recomendaciones): COMPLETA ese registro
+        temporal con el proyecto elegido y lo manda a Dapta.
+      - Sin lead_id (compat): crea el lead desde cero y corre el pipeline entero.
     """
-    lead_id = uuid4()
-    background.add_task(_procesar_lead, lead_id, senal)
-    return {"lead_id": str(lead_id), "status": "procesando"}
+    if lead_id:
+        try:
+            lid = UUID(lead_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="lead_id inválido")
+        background.add_task(_finalizar_lead, lid, senal)
+        return {"lead_id": lead_id, "status": "confirmando"}
+
+    lid = uuid4()
+    background.add_task(_procesar_lead, lid, senal)
+    return {"lead_id": str(lid), "status": "procesando"}
+
+
+async def _finalizar_lead(lead_id: UUID, senal: SenalBowl) -> None:
+    """
+    Completa un lead temporal ya existente (creado en /recomendaciones): guarda el
+    proyecto elegido, lo mueve a 'dapta' y dispara la llamada si está activo.
+    """
+    call_id = str(lead_id)
+    clustering = await clustering_client.predecir_cluster(senal)
+    proyecto = senal.proyecto_elegido or (
+        clustering.proyectos_recomendados[0]
+        if clustering.proyectos_recomendados
+        else None
+    )
+    timeline = [
+        {"pieza": "bowl", "estado": "completado", "nota": "Completó el formulario"},
+        {"pieza": "backend", "estado": "completado", "nota": "Reglas H1–H10"},
+        {"pieza": "clustering", "estado": "completado", "nota": "Recomendaciones generadas"},
+        {"pieza": "dapta", "estado": "en_proceso",
+         "nota": f"Eligió {proyecto}; en contacto con Manuela" if proyecto else "En llamada con Manuela"},
+    ]
+    await supabase_client.actualizar_lead(
+        lead_id,
+        {
+            "senal": senal.model_dump(),
+            "nodo_actual": "dapta",
+            "estado_nodo": "en_proceso",
+            "timeline": timeline,
+        },
+    )
+
+    if config.DAPTA_LLAMADAS_ACTIVAS:
+        try:
+            await dapta_client.disparar_llamada(
+                senal, clustering, external_lead_id=call_id, proyecto_interes=proyecto
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Fallo al disparar Dapta para %s", lead_id)
+    else:
+        logger.info("Lead %s confirmado en 'dapta' (llamadas desactivadas).", lead_id)
 
 
 # --------------------------------------------------------------------------- #

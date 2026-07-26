@@ -72,6 +72,47 @@ async def crear_lead(
         return {"estado": "creado", "id": str(lead_id)}
 
 
+async def crear_lead_recomendaciones(
+    lead_id: UUID,
+    senal: SenalBowl,
+    cluster_id: str | None,
+    proyectos_recomendados: list[str],
+    canal_origen: str = "formulario_web",
+) -> dict[str, Any]:
+    """
+    Registro TEMPORAL creado al terminar el formulario (paso /recomendaciones),
+    ANTES de que la persona elija/confirme. Queda en etapa 'clustering' con las
+    recomendaciones ya calculadas; el dashboard lo ve entrar al instante.
+    Al confirmar (/leads con lead_id) se completa con el proyecto elegido.
+    """
+    if not _configurado():
+        return {"estado": "omitido", "motivo": "Supabase no configurado"}
+
+    import httpx
+
+    fila = {
+        "id": str(lead_id),
+        "call_id": str(lead_id),
+        "canal_origen": canal_origen,
+        "nodo_actual": "clustering",
+        "estado_nodo": "completado",
+        "senal": senal.model_dump(),
+        "cluster_id": cluster_id,
+        "proyectos_recomendados": proyectos_recomendados,
+        "timeline": [
+            {"pieza": "bowl", "estado": "completado", "nota": "Completó el formulario"},
+            {"pieza": "backend", "estado": "completado", "nota": "Reglas H1–H10"},
+            {"pieza": "clustering", "estado": "completado",
+             "nota": "Recomendaciones generadas"},
+        ],
+    }
+    url = f"{config.SUPABASE_URL}/rest/v1/{TABLA}"
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r = await client.post(url, headers=_headers(), json=fila)
+        r.raise_for_status()
+        return {"estado": "creado", "id": str(lead_id)}
+
+
 async def actualizar_lead(lead_id: UUID, campos: dict[str, Any]) -> dict[str, Any]:
     """Actualiza (PATCH) la fila del lead por su `id` con los campos dados."""
     if not _configurado():
