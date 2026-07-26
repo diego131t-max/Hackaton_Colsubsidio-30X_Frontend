@@ -40,12 +40,15 @@ from pydantic import BaseModel, Field, field_validator
 # formulario (Carlos). El front las muestra como multi-select; el usuario elige
 # varias y llegan como lista. Mantener alineados estos slugs con la UI.
 # --------------------------------------------------------------------------- #
+# Etiquetas EXACTAS que espera el modelo de recomendaciones de Santiago (hace
+# match por string contra el catálogo). Con espacios y tal cual — OJO: "gymnasio"
+# (no "gimnasio") y "cancha e padel" (no "de padel"). No slugificar.
 ENTORNO_DESEADO_OPCIONES: list[str] = [
-    "lobby", "piscina", "zona_lavanderia", "zona_bbq", "zona_pet", "zona_kid",
-    "locales_comerciales", "zona_fitness", "salon_social", "spa_mascotas",
-    "zona_cool", "zona_cine", "coworking", "sala_vip", "zona_cafe", "gimnasio",
-    "parqueadero", "zona_verde", "parque", "sala_de_juegos", "pista_de_trote",
-    "voleibol_playa", "cancha_de_padel", "taller_de_bicicletas", "sauna",
+    "lobby", "piscina", "zona de lavanderia", "zona bbq", "zona pet", "zona kid",
+    "locales comerciales", "zona fitness", "salon social", "spa mascotas",
+    "zona cool", "zona cine", "coworking", "sala vip", "zona cafe", "gymnasio",
+    "parqueadero", "zona verde", "parque", "sala de juegos", "pista de trote",
+    "voleibol playa", "cancha e padel", "taller de bicicletas", "sauna",
 ]
 
 # Piso preferido: el front muestra bajo/medio/alto; el valor viaja como 1/2/3.
