@@ -62,6 +62,43 @@ El segundo verifica antes de escribir:
 `--check` verifica sin escribir. Devuelve código 1 si algo falla, así que sirve
 en CI.
 
+## El prompt NO se puede subir por API: hay que pegarlo
+
+Medido, no supuesto: el balanceador de Dapta (`server: awselb/2.0`) responde
+**403 a cualquier peticion con cuerpo mayor de 8192 bytes** — el umbral exacto
+de la regla `SizeRestrictions_BODY` de AWS WAF. Comprobado por biseccion:
+
+```
+ 8121 bytes -> 200        10121 bytes -> 403
+ 8221 bytes -> 403        29121 bytes -> 403
+```
+
+Nuestros prompts pesan ~29 KB, asi que `create_voice_agent` y
+`commit_update_voice_agent` **no pueden transportarlos**. No es algo que se
+arregle recortando: habria que cortar el 72 por ciento. Tampoco hay API REST
+publica para el campo `instructions`.
+
+Consecuencia practica: los agentes se crean por MCP con todo lo demas correcto
+(proposito, voz, idioma, contexto de empresa) y el prompt se pega **a mano**
+desde la interfaz, una vez por agente y cada vez que cambie.
+
+Se crean con un marcador `PROMPT PENDIENTE DE PEGAR` que instruye al agente a
+disculparse y colgar. Es deliberado: si alguien llama antes de pegar el prompt,
+falla de forma visible en vez de sonar plausible y calificar mal a un lead.
+
+### Agentes creados
+
+| Agente | ID | Prompt a pegar |
+|---|---|---|
+| Manuela — Vivienda Afiliados | `1c92622f-9a33-4043-b2d0-342c4309cedf` | `dapta/build/voz-afiliados.txt` |
+| Manuela — Vivienda No Afiliados | `82f36ebd-f28e-46dd-bb21-93fa58b8dcd9` | `dapta/build/voz-no-afiliados.txt` |
+
+Se abren en `https://app.dapta.ai/agents-studio/voice-agents/<id>`.
+
+Esto no contradice la regla de arriba de no editar en la plataforma: la fuente
+de verdad sigue siendo el repo. Lo que se pega es la salida de `build/`, nunca
+texto escrito en Dapta.
+
 ## Publicar en la cuenta nueva de Dapta
 
 El `workspace_id` lo inyecta la API key: **no se puede elegir cuenta desde la
@@ -115,9 +152,10 @@ pegarlo en la configuración de ambos.
 
 ## Checklist de puesta en marcha
 
-- [ ] Crear la cuenta nueva de Dapta y generar su API key
-- [ ] Reconfigurar el MCP `dapta-ai` con esa key
-- [ ] Crear los dos agentes de voz con los payloads de arriba
+- [x] Crear la cuenta nueva de Dapta y generar su API key
+- [x] Reconfigurar el MCP (quedo como `dapta-colsubsidio`, en paralelo al viejo)
+- [x] Crear los dos agentes de voz con los payloads de arriba
+- [ ] Pegar a mano el prompt de `build/` en cada agente (ver limite de 8 KB)
 - [ ] Pegar la URL del post-call webhook en AMBOS agentes
 - [ ] Aprovisionar un número saliente que marque a móviles de Colombia
 - [ ] Crear los dos flows y poner sus webhooks en Render
