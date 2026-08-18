@@ -94,8 +94,8 @@ async def _procesar_lead(lead_id: UUID, senal: SenalBowl) -> None:
     """
     call_id = str(lead_id)
     timeline: list[dict] = [
-        {"pieza": "bowl", "estado": "completado", "nota": "Completó el formulario"},
-        {"pieza": "backend", "estado": "en_proceso", "nota": "Reglas H1–H10"},
+        supabase_client.evento("bowl", "completado", "Completó el formulario"),
+        supabase_client.evento("backend", "en_proceso", "Reglas H1–H10"),
     ]
 
     # 1) Persistir en Supabase (etapa backend). El dashboard lo ve al instante.
@@ -110,8 +110,9 @@ async def _procesar_lead(lead_id: UUID, senal: SenalBowl) -> None:
     # 2) Clustering.
     clustering = await clustering_client.predecir_cluster(senal)
     timeline.append(
-        {"pieza": "clustering", "estado": "completado",
-         "nota": f'Agrupado en "{clustering.cluster_id}"'}
+        supabase_client.evento(
+            "clustering", "completado", f'Agrupado en "{clustering.cluster_id}"'
+        )
     )
     await supabase_client.actualizar_lead(
         lead_id,
@@ -128,7 +129,7 @@ async def _procesar_lead(lead_id: UUID, senal: SenalBowl) -> None:
     # 3) Etapa Dapta.
     await asyncio.sleep(0.8)
     timeline.append(
-        {"pieza": "dapta", "estado": "en_proceso", "nota": "En llamada con Manuela"}
+        supabase_client.evento("dapta", "en_proceso", "En llamada con Manuela")
     )
     await supabase_client.actualizar_lead(
         lead_id,
@@ -180,9 +181,26 @@ async def recomendaciones(senal: SenalBowl) -> dict:
     zona = (senal.zona_interes or "").strip().lower()
     cluster_id = f"{senal.tipo_vivienda}::{zona}" if zona else senal.tipo_vivienda
 
+    # El modelo ya calculó match_score y su desglose; se persisten para que la
+    # ficha del asesor pueda explicar POR QUÉ se recomendó cada proyecto. Se
+    # guarda un subconjunto acotado, no la recomendación entera: el catálogo
+    # completo (planos, amenidades) no aporta nada en la ficha y engorda la fila.
+    detalle = [
+        {
+            "nombre_proyecto": r.get("nombre_proyecto"),
+            "match_score": r.get("match_score"),
+            "match_desglose": r.get("match_desglose"),
+            "precio_desde_cop": r.get("precio_desde_cop"),
+            "tipo_vivienda": r.get("tipo_vivienda"),
+            "zona_interes": r.get("zona_interes"),
+            "url_ficha": r.get("url_ficha"),
+        }
+        for r in resultado["recomendaciones"]
+    ]
+
     try:
         await supabase_client.crear_lead_recomendaciones(
-            lead_id, senal, cluster_id, proyectos
+            lead_id, senal, cluster_id, proyectos, recomendaciones_detalle=detalle
         )
     except Exception:  # noqa: BLE001 - no romper la respuesta por un fallo de I/O
         logger.exception("No se pudo crear el lead temporal %s en Supabase", lead_id)
@@ -226,11 +244,15 @@ async def _finalizar_lead(lead_id: UUID, senal: SenalBowl) -> None:
         else None
     )
     timeline = [
-        {"pieza": "bowl", "estado": "completado", "nota": "Completó el formulario"},
-        {"pieza": "backend", "estado": "completado", "nota": "Reglas H1–H10"},
-        {"pieza": "clustering", "estado": "completado", "nota": "Recomendaciones generadas"},
-        {"pieza": "dapta", "estado": "en_proceso",
-         "nota": f"Eligió {proyecto}; en contacto con Manuela" if proyecto else "En llamada con Manuela"},
+        supabase_client.evento("bowl", "completado", "Completó el formulario"),
+        supabase_client.evento("backend", "completado", "Reglas H1–H10"),
+        supabase_client.evento("clustering", "completado", "Recomendaciones generadas"),
+        supabase_client.evento(
+            "dapta",
+            "en_proceso",
+            f"Eligió {proyecto}; en contacto con Manuela" if proyecto
+            else "En llamada con Manuela",
+        ),
     ]
     await supabase_client.actualizar_lead(
         lead_id,

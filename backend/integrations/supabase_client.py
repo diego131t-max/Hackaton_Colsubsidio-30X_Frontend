@@ -13,6 +13,7 @@ quedan en no-op (útil en tests o sin .env) para no romper el webhook.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -21,6 +22,61 @@ from backend.integrations.dapta_client import normalizar_telefono_e164
 from backend.models.schemas import ResultadoCalificacionDapta, SenalBowl
 
 TABLA = "reto_vivienda_leads"
+
+# Bogotá (UTC-5, sin horario de verano). Manuela agenda "mañana a las 10" pensando
+# en hora local; guardarlo como UTC ingenuo correría toda cita 5 horas.
+TZ_BOGOTA = timezone(timedelta(hours=-5))
+
+
+def ahora_iso() -> str:
+    """Instante actual en ISO-8601 con offset de Bogotá."""
+    return datetime.now(TZ_BOGOTA).isoformat(timespec="seconds")
+
+
+def evento(pieza: str, estado: str, nota: str) -> dict[str, str]:
+    """
+    Un evento del timeline, con marca de tiempo.
+
+    El asesor no necesita saber en qué etapa está el lead (eso ya lo dice
+    `nodo_actual`): necesita saber HACE CUÁNTO pasó cada cosa, porque un lead
+    caliente de hace 20 minutos y uno de hace seis días se trabajan distinto.
+    Los eventos históricos no tienen `ts` — quien los lea debe tolerar su
+    ausencia en vez de asumir la fecha de la fila.
+    """
+    return {"pieza": pieza, "estado": estado, "nota": nota, "ts": ahora_iso()}
+
+
+# Formatos que puede devolver el agente al agendar, del más al menos explícito.
+# Es deliberadamente corto: si no cae en uno de estos, se prefiere dejar la
+# columna en null antes que adivinar una fecha y mandar al asesor un día errado.
+_FORMATOS_FECHA = (
+    "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M",
+    "%Y-%m-%d %H:%M", "%d/%m/%Y %H:%M", "%Y-%m-%d",
+)
+
+
+def _parsear_agendamiento(crudo: str | None) -> str | None:
+    """
+    Texto libre del agente -> ISO-8601 con zona de Bogotá, o None.
+
+    Devolver None NO pierde información: el texto original sigue guardado en
+    `resultado_dapta.fecha_hora_agendada`. La columna existe solo para poder
+    ordenar por "cita más próxima", y una fecha inventada ahí es peor que un
+    hueco, porque el asesor la leería como un compromiso real.
+    """
+    if not crudo or not str(crudo).strip():
+        return None
+    texto = str(crudo).strip().replace("Z", "")
+    for formato in _FORMATOS_FECHA:
+        try:
+            fecha = datetime.strptime(texto, formato)
+        except ValueError:
+            continue
+        return fecha.replace(tzinfo=TZ_BOGOTA).isoformat(timespec="seconds")
+    try:  # último intento: ISO con offset ya incluido
+        return datetime.fromisoformat(texto).isoformat(timespec="seconds")
+    except ValueError:
+        return None
 
 
 def _configurado() -> bool:
@@ -64,8 +120,8 @@ async def crear_lead(
         "estado_nodo": "en_proceso",
         "senal": senal.model_dump(),
         "timeline": [
-            {"pieza": "bowl", "estado": "completado", "nota": "Completó el formulario"},
-            {"pieza": "backend", "estado": "en_proceso", "nota": "Reglas H1–H10"},
+            evento("bowl", "completado", "Completó el formulario"),
+            evento("backend", "en_proceso", "Reglas H1–H10"),
         ],
     }
     url = f"{config.SUPABASE_URL}/rest/v1/{TABLA}"
@@ -81,6 +137,7 @@ async def crear_lead_recomendaciones(
     cluster_id: str | None,
     proyectos_recomendados: list[str],
     canal_origen: str = "formulario_web",
+    recomendaciones_detalle: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     Registro TEMPORAL creado al terminar el formulario (paso /recomendaciones),
@@ -104,11 +161,14 @@ async def crear_lead_recomendaciones(
         "senal": senal.model_dump(),
         "cluster_id": cluster_id,
         "proyectos_recomendados": proyectos_recomendados,
+        # Espejo enriquecido: mismos proyectos, con el match_score que el modelo
+        # ya calculó. Sin esto el asesor ve una lista de nombres sin saber cuál
+        # encaja mejor ni por qué.
+        "recomendaciones_detalle": recomendaciones_detalle or [],
         "timeline": [
-            {"pieza": "bowl", "estado": "completado", "nota": "Completó el formulario"},
-            {"pieza": "backend", "estado": "completado", "nota": "Reglas H1–H10"},
-            {"pieza": "clustering", "estado": "completado",
-             "nota": "Recomendaciones generadas"},
+            evento("bowl", "completado", "Completó el formulario"),
+            evento("backend", "completado", "Reglas H1–H10"),
+            evento("clustering", "completado", "Recomendaciones generadas"),
         ],
     }
     url = f"{config.SUPABASE_URL}/rest/v1/{TABLA}"
@@ -152,8 +212,22 @@ def _criterio_correlacion(resultado: ResultadoCalificacionDapta) -> tuple[dict[s
     if tel:
         # Normaliza a E.164 y cruza contra la columna telefono_e164 (así el
         # to_number "+573125923915" matchea aunque el form guardara "312 592 3915").
+        #
+        # `resultado_dapta=is.null` NO es un detalle: una llamada sin contestar
+        # deja la fila en 'dapta' (estado 'error'), así que sigue cruzando por
+        # teléfono. Sin este filtro, el resultado de la SIGUIENTE llamada a ese
+        # mismo número pisa el lead que ya tenía respuesta en vez de tomar el que
+        # aún la espera — y un lead se queda mudo para siempre. Un teléfono
+        # repetido es común: la misma persona llena el formulario dos veces.
         tel_e164 = normalizar_telefono_e164(tel)
-        return {"telefono_e164": f"eq.{tel_e164}", "nodo_actual": "eq.dapta"}, "telefono"
+        return (
+            {
+                "telefono_e164": f"eq.{tel_e164}",
+                "nodo_actual": "eq.dapta",
+                "resultado_dapta": "is.null",
+            },
+            "telefono",
+        )
     return {"call_id": f"eq.{resultado.call_id}"}, "call_id"
 
 
@@ -182,7 +256,12 @@ async def guardar_resultado(resultado: ResultadoCalificacionDapta) -> dict[str, 
             "estado_nodo": "completado",
             "calificacion": resultado.calificacion_lead,
             "resultado_dapta": resultado.model_dump(),
+            # Texto libre del agente -> timestamp ordenable. Si no se puede
+            # interpretar queda null, pero el texto sigue en resultado_dapta.
+            "agendado_para": _parsear_agendamiento(resultado.fecha_hora_agendada),
         }
+        nota_evento = "Calificado %s por Manuela" % resultado.calificacion_lead
+        estado_evento = "completado"
     else:
         # No contestó / buzón: no hay calificación. No avanza a asesor; queda en
         # 'dapta' con estado 'error' (candidato a seguimiento). El motivo real
@@ -192,15 +271,56 @@ async def guardar_resultado(resultado: ResultadoCalificacionDapta) -> dict[str, 
             "estado_nodo": "error",
             "resultado_dapta": resultado.model_dump(),
         }
+        nota_evento = "Sin respuesta (%s)" % (resultado.disconnection_reason or "desconocido")
+        estado_evento = "error"
+
     url = f"{config.SUPABASE_URL}/rest/v1/{TABLA}"
     params, criterio = _criterio_correlacion(resultado)
 
     async with httpx.AsyncClient(timeout=15.0) as client:
-        r = await client.patch(url, headers=_headers(), params=params, json=cuerpo)
+        # Se LEE antes de escribir porque el timeline se AÑADE, no se reemplaza:
+        # un PATCH directo del array borraría los eventos previos (bowl, backend,
+        # clustering) y el asesor perdería la historia del lead. PostgREST no
+        # sabe hacer append sobre jsonb en una sola operación.
+        previa = await client.get(
+            url,
+            headers=_headers(),
+            # `order` explícito: sin él PostgREST no garantiza el orden y el
+            # desempate de abajo (filas_previas[-1] = la más reciente) sería azar.
+            params={**params, "select": "id,timeline", "order": "created_at.asc"},
+        )
+        previa.raise_for_status()
+        filas_previas = previa.json()
+        if not filas_previas:
+            return {
+                "estado": "sin_match",
+                "criterio": criterio,
+                "call_id": resultado.call_id,
+                "lead_id": resultado.lead_id_correlacion,
+            }
+
+        # El criterio por teléfono puede traer más de una fila (mismo número que
+        # rellenó el formulario dos veces). Se actualiza la MÁS RECIENTE por id,
+        # no todas: pisar leads viejos con el resultado de una llamada nueva
+        # inventaría historia que no ocurrió.
+        objetivo = filas_previas[-1]
+        timeline = objetivo.get("timeline") or []
+        if not isinstance(timeline, list):
+            timeline = []
+        cuerpo["timeline"] = timeline + [evento("dapta", estado_evento, nota_evento)]
+
+        r = await client.patch(
+            url, headers=_headers(), params={"id": f"eq.{objetivo['id']}"}, json=cuerpo
+        )
         r.raise_for_status()
         filas = r.json()
         if filas:
-            return {"estado": "actualizado", "filas": len(filas), "criterio": criterio}
+            return {
+                "estado": "actualizado",
+                "filas": len(filas),
+                "criterio": criterio,
+                "agendado_para": cuerpo.get("agendado_para"),
+            }
         return {
             "estado": "sin_match",
             "criterio": criterio,

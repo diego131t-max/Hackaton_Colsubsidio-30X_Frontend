@@ -148,6 +148,19 @@ class ResultadoCalificacionDapta(BaseModel):
     # Motivo de desconexión que envía Dapta (no_answer, voicemail, user_hangup…).
     disconnection_reason: str | None = None
 
+    # --- Lo que el asesor necesita para retomar sin repreguntar (ficha H9) ---- #
+    # Por qué salió en ese nivel. Manuela ya lo razona para decidir la etiqueta;
+    # sin esto el asesor ve un badge "caliente" sin saber qué lo hizo caliente y
+    # tiene que escuchar la llamada entera para enterarse.
+    justificacion_calificacion: str | None = None
+    # Cita acordada. Se recibe TAL CUAL la dijo el agente (texto libre: Manuela
+    # agenda hablando, no llenando un date picker). La normalización a timestamp
+    # ocurre al persistir — ver supabase_client._parsear_agendamiento — y el texto
+    # original se conserva siempre, porque un parseo fallido no debe borrar el
+    # único registro de que la persona sí aceptó una cita.
+    fecha_hora_agendada: str | None = None
+    modalidad_agendada: str | None = None  # "virtual" | "presencial"
+
     @property
     def lead_id_correlacion(self) -> str | None:
         """Nuestro id de lead, venga como `lead_id` o como `external_lead_id`."""
