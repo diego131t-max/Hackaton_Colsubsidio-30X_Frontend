@@ -5,33 +5,38 @@
    ========================================================================== */
 
 :root {
-  --cs-orange: #f5821f;
-  --cs-orange-soft: #ff9d45;
-  --cs-amber: #ffb81c;
-  --cs-blue: #2f80ed;
-  --cs-blue-deep: #0b3d91;
+  /* Marca Colsubsidio, tomada del logo oficial (logo-colsubsidio.svg).
+     Los grises azulados de abajo se derivan del mismo tono (~203°) para que el
+     tablero se lea como una pieza de la marca y no como un dashboard genérico
+     al que le pegaron dos colores encima. */
+  --cs-azul: #0067b1;
+  --cs-azul-claro: #3fa2e0;
+  --cs-amarillo: #ffd000;
 
-  --bg: #0b1220;
-  --bg-elev: #121b2e;
-  --bg-elev-2: #18233b;
-  --line: #26324c;
-  --line-soft: #1c2740;
-  --text: #eef2fb;
-  --text-dim: #9aa8c7;
-  --text-faint: #6b7a9c;
+  --bg: #06192a;
+  --bg-elev: #0b2438;
+  --bg-elev-2: #103049;
+  --line: #1b405c;
+  --line-soft: #143349;
+  --linea-honda: #10314a;
+  --text: #eaf3fa;
+  --text-dim: #9db8cd;
+  --text-faint: #6b8ba4;
 
-  --st-inactivo: #556080;
-  --st-proceso: var(--cs-amber);
-  --st-completado: #2ecc71;
-  --st-error: #ff5c5c;
+  --st-inactivo: #4d6e88;
+  --st-proceso: var(--cs-amarillo);
+  --st-completado: #2fbf78;
+  --st-error: #ff6b57;
 
-  --cal-caliente: var(--cs-orange);
-  --cal-tibio: var(--cs-amber);
-  --cal-frio: #56a0ff;
+  /* Mismos niveles que la ficha del asesor, subidos de luminosidad para que
+     mantengan contraste sobre fondo oscuro. */
+  --cal-caliente: #ff6b52;
+  --cal-tibio: var(--cs-amarillo);
+  --cal-frio: #4aa8e8;
 
   --radius: 14px;
   --radius-sm: 9px;
-  --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  --shadow: 0 10px 34px rgba(0, 0, 0, 0.42);
   font-synthesis: none;
 }
 
@@ -45,7 +50,7 @@ body,
 }
 body {
   margin: 0;
-  background: radial-gradient(1200px 700px at 80% -10%, #12213f 0%, var(--bg) 55%);
+  background: radial-gradient(1100px 640px at 82% -12%, #0d3a58 0%, var(--bg) 58%);
   color: var(--text);
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -74,7 +79,7 @@ body {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--cs-orange), var(--cs-amber));
+  background: linear-gradient(135deg, var(--cs-azul), var(--cs-azul-claro));
   display: grid;
   place-items: center;
   font-weight: 800;
@@ -136,7 +141,7 @@ body {
   line-height: 1;
 }
 .kpi__num[data-cal="caliente"] {
-  color: var(--cs-orange);
+  color: var(--cal-caliente);
 }
 .kpi__lbl {
   font-size: 11.5px;
@@ -171,199 +176,272 @@ body {
   text-align: right;
 }
 
-/* --- MAPA DEL SISTEMA ----------------------------------------------------- */
-.map-card {
+/* --- FLUJO DE LA OPERACIÓN ------------------------------------------------
+   Nodos unidos por cables con pulsos viajando. El grosor del cable y la
+   densidad de pulsos son proporcionales al volumen real que pasa por el tramo,
+   así que la animación informa en vez de solo adornar.
+   ------------------------------------------------------------------------- */
+.flujo-card {
   overflow: hidden;
 }
-.rail {
-  display: flex;
-  gap: 0;
+.flujo {
   position: relative;
+  min-height: 190px;
 }
-.node {
-  flex: 1 1 0;
-  min-width: 118px;
+.flujo__cables {
+  position: absolute;
+  inset: 0 0 auto 0;
+  pointer-events: none;
+}
+
+.cable__conducto {
+  fill: none;
+  stroke: var(--linea-honda);
+  stroke-linecap: round;
+}
+.cable__vivo {
+  fill: none;
+  stroke: url(#cableGrad);
+  stroke-linecap: round;
+  /* El guion en movimiento da la sensación de corriente incluso donde no hay
+     pulsos suficientes para llenar el tramo. */
+  stroke-dasharray: 2 14;
+  animation: corriente 1.1s linear infinite;
+}
+@keyframes corriente {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+.cable__pulso {
+  fill: var(--cs-amarillo);
+  filter: drop-shadow(0 0 5px rgba(255, 208, 0, 0.75));
+}
+/* Un tramo por el que no pasa nadie no debe sugerir movimiento. */
+.cable--mudo .cable__vivo {
+  stroke: var(--linea-honda);
+  animation: none;
+}
+
+.flujo__caudal {
+  position: absolute;
+  transform: translate(-50%, 0);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.flujo__caudal-n {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.flujo__caudal-caida {
+  color: var(--st-error);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.flujo__nodos {
   position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+.nodo {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 5px;
-  padding: 8px 6px 4px;
+  padding: 0 6px;
 }
-.node__edge {
-  position: absolute;
-  top: 30px;
-  left: 50%;
-  width: 100%;
-  height: 3px;
-  background: var(--line-soft);
-  border-radius: 3px;
-  z-index: 0;
-}
-.node__icon {
+.nodo__circulo {
   position: relative;
-  z-index: 1;
-  width: 54px;
-  height: 54px;
-  border-radius: 15px;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 22px;
   background: var(--bg-elev-2);
-  border: 1.5px solid var(--line);
-  color: var(--text);
-  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-color 0.35s, box-shadow 0.35s, background 0.35s;
+  border: 2px solid var(--line);
+  color: var(--text-dim);
+  transition: color 0.25s, border-color 0.25s, box-shadow 0.25s;
 }
-.node__name {
-  font-size: 13px;
-  font-weight: 700;
-}
-.node__desc {
-  font-size: 10.5px;
-  color: var(--text-faint);
-  line-height: 1.25;
-  max-width: 130px;
-}
-.node__count {
+.nodo__badge {
   position: absolute;
-  top: 6px;
-  right: calc(50% - 34px);
-  z-index: 2;
-  min-width: 20px;
-  height: 20px;
+  top: -4px;
+  right: -4px;
+  min-width: 22px;
+  height: 22px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--cs-orange);
-  color: #241000;
+  display: grid;
+  place-items: center;
   font-size: 11px;
   font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  background: var(--cs-amarillo);
+  color: #3a2e00;
+  border: 2px solid var(--bg);
 }
-.node__count:empty {
-  display: none;
+.nodo__nombre {
+  margin-top: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
 }
-
-.node[data-estado="completado"] .node__icon {
-  border-color: var(--st-completado);
-  box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.4) inset;
+.nodo__desc {
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--text-faint);
+  max-width: 15ch;
 }
-.node[data-estado="en_proceso"] .node__icon {
-  border-color: var(--st-proceso);
-  background: linear-gradient(135deg, rgba(245, 130, 31, 0.25), rgba(255, 184, 28, 0.25));
-  box-shadow: 0 0 0 0 rgba(255, 184, 28, 0.5);
-  animation: pulse-node 1.6s infinite;
-}
-.node[data-estado="error"] .node__icon {
-  border-color: var(--st-error);
-  background: rgba(255, 92, 92, 0.16);
-  animation: shake 0.5s;
-}
-
-/* Lanes: cada lead es una ficha que se desliza a la posición de su nodo */
-.lanes {
-  position: relative;
-  margin-top: 14px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--line-soft);
+.nodo__leads {
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  min-height: 44px;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
 }
-.lane {
-  position: relative;
-  height: 30px;
+
+/* Estados del nodo: azul de marca cuando trabajó, ámbar mientras trabaja. */
+.nodo[data-estado="completado"] .nodo__circulo {
+  color: #5fb4e8;
+  border-color: var(--cs-azul);
+  box-shadow: 0 0 0 4px rgba(0, 103, 177, 0.16);
 }
-.chip {
-  position: absolute;
-  top: 0;
-  transform: translateX(-50%);
+.nodo[data-estado="en_proceso"] .nodo__circulo {
+  color: var(--cs-amarillo);
+  border-color: var(--cs-amarillo);
+  animation: latido 1.9s ease-in-out infinite;
+}
+@keyframes latido {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 208, 0, 0.34);
+  }
+  50% {
+    box-shadow: 0 0 0 9px rgba(255, 208, 0, 0);
+  }
+}
+.nodo[data-estado="error"] .nodo__circulo {
+  color: var(--st-error);
+  border-color: var(--st-error);
+  box-shadow: 0 0 0 4px rgba(255, 92, 92, 0.14);
+}
+
+/* Fichas de lead bajo cada nodo */
+.ficha {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 28px;
-  padding: 0 12px 0 10px;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: var(--bg-elev-2);
-  color: var(--text);
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
   cursor: pointer;
-  /* La transición del flujo: la ficha viaja de un nodo al siguiente */
-  transition: left 0.9s cubic-bezier(0.4, 0.1, 0.2, 1), border-color 0.25s,
-    box-shadow 0.25s, transform 0.25s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.chip:hover {
-  transform: translateX(-50%) translateY(-1px);
-  border-color: var(--cs-orange);
+.ficha:hover {
+  color: var(--text);
+  border-color: var(--cs-azul);
 }
-.chip--sel {
-  border-color: var(--cs-orange);
-  box-shadow: 0 0 0 2px rgba(245, 130, 31, 0.35);
+.ficha--sel {
+  border-color: var(--cs-amarillo);
+  color: var(--text);
 }
-.chip__dot {
-  width: 8px;
-  height: 8px;
+.ficha--mas {
+  cursor: default;
+  border-style: dashed;
+  color: var(--text-faint);
+}
+.ficha__dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--st-inactivo);
-  flex: none;
+  flex-shrink: 0;
 }
-.chip[data-estado="en_proceso"] .chip__dot {
+.ficha[data-estado="en_proceso"] .ficha__dot {
   background: var(--st-proceso);
-  animation: pulse-dot 1.3s infinite;
 }
-.chip[data-estado="completado"] .chip__dot {
+.ficha[data-estado="completado"] .ficha__dot {
   background: var(--st-completado);
 }
-.chip[data-estado="error"] .chip__dot {
+.ficha[data-estado="error"] .ficha__dot {
   background: var(--st-error);
-  animation: pulse-dot 0.9s infinite;
 }
-.chip[data-cal="caliente"] {
-  border-color: var(--cal-caliente);
+.ficha[data-cal="caliente"] .ficha__dot {
+  background: var(--cal-caliente);
 }
-.chip[data-cal="tibio"] {
-  border-color: var(--cal-tibio);
+.ficha[data-cal="tibio"] .ficha__dot {
+  background: var(--cal-tibio);
 }
-.chip[data-cal="frio"] {
-  border-color: var(--cal-frio);
+.ficha[data-cal="frio"] .ficha__dot {
+  background: var(--cal-frio);
 }
 
-/* Supabase como almacén conectado */
-.store {
-  margin-top: 16px;
+/* Supabase colgando del riel */
+.almacen {
+  margin-top: 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-.store__link {
+.almacen__cable {
   width: 2px;
-  height: 16px;
+  height: 18px;
   background: repeating-linear-gradient(
     to bottom,
-    var(--line) 0 4px,
-    transparent 4px 8px
+    var(--cs-azul) 0 5px,
+    transparent 5px 10px
   );
 }
-.store__box {
+.almacen__caja {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: 9px;
+  padding: 9px 16px;
   border-radius: var(--radius-sm);
-  border: 1px dashed var(--line);
+  border: 1px solid var(--line);
   background: var(--bg-elev-2);
+  color: var(--text-dim);
   font-size: 13px;
 }
-.store__tag {
+.almacen__caja strong {
+  color: var(--text);
+}
+.almacen__tag {
   font-size: 10.5px;
   color: var(--text-faint);
+}
+
+@media (max-width: 860px) {
+  /* En pantalla estrecha los cables se cruzarían con el texto: se ocultan y
+     los nodos pasan a una rejilla, que sigue siendo legible. */
+  .flujo__cables,
+  .flujo__caudal {
+    display: none;
+  }
+  .flujo__nodos {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+  .flujo {
+    min-height: 0;
+  }
 }
 
 /* --- Grid inferior -------------------------------------------------------- */
@@ -412,7 +490,7 @@ body {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--cs-blue);
+  background: var(--cs-azul);
 }
 .log__row[data-tono="ok"] .log__dot {
   background: var(--st-completado);
@@ -553,7 +631,7 @@ body {
 }
 .drawer__close:hover {
   color: var(--text);
-  border-color: var(--cs-orange);
+  border-color: var(--cal-caliente);
 }
 .detail-section {
   margin-top: 18px;
@@ -562,7 +640,7 @@ body {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: var(--cs-orange-soft);
+  color: var(--cal-caliente);
   font-weight: 700;
   margin-bottom: 10px;
 }
@@ -760,4 +838,12 @@ body.tema-asesor .topbar .brand__title {
 body.tema-asesor .topbar .brand__sub,
 body.tema-asesor .live-pill {
   color: #5a6675;
+}
+
+/* Subtítulo del KPI: la cifra sola no dice si 20 es mucho o poco. */
+.kpi__sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--text-faint);
 }

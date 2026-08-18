@@ -68,6 +68,12 @@ function esElElegido(r: RecomendacionDetalle, elegido?: string | null): boolean 
   return canon(r.nombre_proyecto ?? "") === canon(elegido);
 }
 
+/** Iniciales para el avatar. Da identidad visual sin necesitar una foto. */
+function iniciales(lead: Lead): string {
+  const s = lead.senal ?? ({} as Lead["senal"]);
+  return `${(s.nombre ?? "")[0] ?? ""}${(s.apellido ?? "")[0] ?? ""}`.toUpperCase() || "?";
+}
+
 /** Texto o guion largo — nunca una cadena vacía que parezca un dato borrado. */
 function oGuion(v?: string | null): string {
   const t = (v ?? "").trim();
@@ -116,6 +122,15 @@ function FilaLead({
 // --------------------------------------------------------------------------- //
 // Bloques del detalle
 // --------------------------------------------------------------------------- //
+// Las 4 dimensiones del score, con su tope. Suman 100 y el orden es el mismo
+// que usa el modelo (modelo_recomendaciones/recomendaciones.py).
+const DIMENSIONES = [
+  { clave: "entorno", etiqueta: "Entorno", tope: 50 },
+  { clave: "capacidad", etiqueta: "Capacidad", tope: 20 },
+  { clave: "asequibilidad", etiqueta: "Asequibilidad", tope: 18 },
+  { clave: "beneficio_caja", etiqueta: "Beneficio caja", tope: 12 },
+] as const;
+
 function BarraMatch({
   r,
   mejor,
@@ -126,15 +141,15 @@ function BarraMatch({
   elegido: boolean;
 }) {
   const pct = Math.max(0, Math.min(100, Math.round(r.match_score ?? 0)));
-  const d = r.match_desglose ?? {};
-  // El desglose explica el número: sin él, "72" es una cifra que el asesor no
-  // puede defender si el cliente pregunta "¿por qué este proyecto?".
-  const partes = [
-    ["Entorno", d.entorno, 50],
-    ["Capacidad", d.capacidad, 20],
-    ["Asequibilidad", d.asequibilidad, 18],
-    ["Beneficio caja", d.beneficio_caja, 12],
-  ] as const;
+  const d = (r.match_desglose ?? {}) as Record<string, number | undefined>;
+  // Barra SEGMENTADA, no una sola barra de relleno. Como las 4 dimensiones suman
+  // exactamente 100, cada tramo se dibuja a su ancho real y el asesor ve de
+  // dónde sale el número: dos proyectos con el mismo 72 pueden tenerlo por
+  // motivos opuestos, y eso cambia lo que le dice al cliente.
+  const segmentos = DIMENSIONES.map((dim) => ({
+    ...dim,
+    valor: Math.max(0, Number(d[dim.clave] ?? 0)),
+  }));
 
   return (
     <li className={`as-rec${mejor ? " as-rec--top" : ""}${elegido ? " as-rec--elegido" : ""}`}>
@@ -149,19 +164,34 @@ function BarraMatch({
           )}
           {elegido && <span className="as-rec__elegido">elegido</span>}
         </span>
+        <span className="as-rec__precio">{pesosCortos(r.precio_desde_cop)}</span>
         <span className="as-rec__score">{pct}</span>
       </div>
-      <div className="as-rec__barra" role="img" aria-label={`Coincidencia ${pct} de 100`}>
-        <span style={{ width: `${pct}%` }} />
+
+      <div
+        className="as-rec__barra"
+        role="img"
+        aria-label={`Coincidencia ${pct} de 100: ${segmentos
+          .map((x) => `${x.etiqueta} ${Math.round(x.valor)} de ${x.tope}`)
+          .join(", ")}`}
+      >
+        {segmentos.map((x) => (
+          <span
+            key={x.clave}
+            className={`as-seg as-seg--${x.clave}`}
+            style={{ width: `${x.valor}%` }}
+            title={`${x.etiqueta}: ${Math.round(x.valor)}/${x.tope}`}
+          />
+        ))}
       </div>
-      <div className="as-rec__pie">
-        <span>{pesosCortos(r.precio_desde_cop)}</span>
-        <span className="as-rec__desglose">
-          {partes
-            .filter(([, v]) => v != null)
-            .map(([etiqueta, v, tope]) => `${etiqueta} ${Math.round(v as number)}/${tope}`)
-            .join(" · ") || "sin desglose"}
-        </span>
+
+      <div className="as-rec__leyenda">
+        {segmentos.map((x) => (
+          <span key={x.clave} className="as-leyenda">
+            <i className={`as-seg as-seg--${x.clave}`} />
+            {x.etiqueta} <b>{Math.round(x.valor)}</b>/{x.tope}
+          </span>
+        ))}
       </div>
     </li>
   );
@@ -267,14 +297,19 @@ function Detalle({ lead }: { lead: Lead }) {
       {/* 1 + 2 — identidad y nivel, lo primero que se lee */}
       <header className="as-cab">
         <div className="as-cab__izq">
-          <h2 className="as-cab__nombre">{nombreDe(lead)}</h2>
-          <div className="as-cab__contacto">
-            <a href={`tel:${s.telefono_movil ?? ""}`}>{oGuion(s.telefono_movil)}</a>
-            <span aria-hidden>·</span>
-            <a href={`mailto:${s.correo ?? ""}`}>{oGuion(s.correo)}</a>
+          <div className={`as-avatar as-avatar--${nivel}`} aria-hidden>
+            {iniciales(lead)}
           </div>
-          <div className="as-cab__origen">
-            Entró {antiguedad(lead.createdAt)} por {oGuion(lead.canal_origen)}
+          <div>
+            <h2 className="as-cab__nombre">{nombreDe(lead)}</h2>
+            <div className="as-cab__contacto">
+              <a href={`tel:${s.telefono_movil ?? ""}`}>{oGuion(s.telefono_movil)}</a>
+              <span aria-hidden>·</span>
+              <a href={`mailto:${s.correo ?? ""}`}>{oGuion(s.correo)}</a>
+            </div>
+            <div className="as-cab__origen">
+              Entró {antiguedad(lead.createdAt)} por {oGuion(lead.canal_origen)}
+            </div>
           </div>
         </div>
         <div className="as-cab__der">
@@ -295,6 +330,32 @@ function Detalle({ lead }: { lead: Lead }) {
           ? `La llamada no conectó (${oGuion(d?.disconnection_reason)}).`
           : oGuion(d?.justificacion_calificacion)}
       </p>
+
+      {/* Acciones directas: el asesor abre esta ficha para HACER algo, y lo que
+          hace es llamar. Tenerlo a un clic evita el copiar-pegar del número,
+          que es donde se cuelan los errores de digitación. */}
+      <div className="as-acciones">
+        <a className="as-btn as-btn--primario" href={`tel:${s.telefono_movil ?? ""}`}>
+          Llamar
+        </a>
+        <a
+          className="as-btn"
+          href={`https://wa.me/${(s.telefono_movil ?? "").replace(/\D/g, "")}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          WhatsApp
+        </a>
+        <a className="as-btn" href={`mailto:${s.correo ?? ""}`}>
+          Correo
+        </a>
+        {lead.agendadoPara && (
+          <span className={`as-cita${esPasado(lead.agendadoPara) ? " as-cita--vencida" : ""}`}>
+            {esPasado(lead.agendadoPara) ? "Cita vencida:" : "Cita:"}{" "}
+            {fechaHora(lead.agendadoPara)}
+          </span>
+        )}
+      </div>
 
       {/* 1 — perfil */}
       <section className="as-bloque">
@@ -489,6 +550,18 @@ export function AsesorView({ leads }: Props) {
     <div className="as-wrap">
       <aside className="as-lista">
         <div className="as-lista__cab">
+          {/* Reparto del embudo: dice de un vistazo cómo va la cosecha del día
+              antes de entrar a ningún lead en concreto. */}
+          <div className="as-embudo">
+            {(["caliente", "tibio", "frio", "sin_respuesta"] as const).map((n) => (
+              <div key={n} className="as-embudo__celda">
+                <span className={`as-embudo__n as-embudo__n--${n}`}>{conteos[n]}</span>
+                <span className="as-embudo__lbl">
+                  {n === "sin_respuesta" ? "s/resp." : ETIQUETA_NIVEL[n]}
+                </span>
+              </div>
+            ))}
+          </div>
           <input
             className="as-buscar"
             type="search"

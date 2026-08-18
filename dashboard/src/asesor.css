@@ -277,6 +277,44 @@ body.tema-asesor {
   padding-bottom: 14px;
   border-bottom: 2px solid var(--am);
 }
+.as-cab__izq {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  min-width: 0;
+}
+.as-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  background: var(--az-tenue);
+  color: var(--az);
+}
+/* El avatar repite el color del nivel: al recorrer la ficha el ojo lo vuelve a
+   encontrar sin tener que releer el badge. */
+.as-avatar--caliente {
+  background: var(--caliente-tenue);
+  color: var(--caliente);
+}
+.as-avatar--tibio {
+  background: var(--tibio-tenue);
+  color: var(--tibio-tinta);
+}
+.as-avatar--frio {
+  background: var(--frio-tenue);
+  color: var(--frio);
+}
+.as-avatar--sin_respuesta {
+  background: var(--nulo-tenue);
+  color: var(--nulo);
+}
+
 .as-cab__nombre {
   margin: 0 0 5px;
   font-size: clamp(20px, 2.6vw, 26px);
@@ -657,4 +695,147 @@ body.tema-asesor {
   padding: 8px 11px;
   background: var(--am-tenue);
   border-radius: var(--r-sm);
+}
+
+
+/* --- Acciones directas ---------------------------------------------------- */
+.as-acciones {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+.as-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 15px;
+  border-radius: 999px;
+  border: 1px solid var(--linea-fuerte);
+  background: var(--sup);
+  color: var(--tinta-media);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.as-btn:hover {
+  border-color: var(--az);
+  color: var(--az);
+}
+.as-btn--primario {
+  background: var(--az);
+  border-color: var(--az);
+  color: #fff;
+}
+.as-btn--primario:hover {
+  background: var(--az-oscuro);
+  border-color: var(--az-oscuro);
+  color: #fff;
+}
+.as-cita {
+  margin-left: 2px;
+  font-size: 12px;
+  color: var(--tinta-media);
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--am-tenue);
+}
+.as-cita--vencida {
+  background: var(--caliente-tenue);
+  color: var(--caliente);
+  font-weight: 600;
+}
+
+/* --- Resumen del embudo sobre la lista ------------------------------------ */
+.as-embudo {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 2px 0 8px;
+  border-bottom: 1px solid var(--linea);
+}
+.as-embudo__celda {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+}
+.as-embudo__n {
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.as-embudo__n--caliente {
+  color: var(--caliente);
+}
+.as-embudo__n--tibio {
+  color: #b08c00;
+}
+.as-embudo__n--frio {
+  color: var(--frio);
+}
+.as-embudo__n--sin_respuesta {
+  color: var(--nulo);
+}
+.as-embudo__lbl {
+  font-size: 10px;
+  color: var(--tinta-suave);
+}
+
+/* --- Barra de match segmentada -------------------------------------------- */
+.as-rec__precio {
+  margin-left: auto;
+  margin-right: 10px;
+  font-size: 11.5px;
+  color: var(--tinta-suave);
+  font-variant-numeric: tabular-nums;
+}
+.as-rec__barra {
+  display: flex;
+  height: 9px;
+  border-radius: 999px;
+  background: #e4e9ef;
+  margin: 8px 0 7px;
+  overflow: hidden;
+}
+.as-seg {
+  display: block;
+  height: 100%;
+}
+/* Azules de marca para las tres dimensiones del ajuste, y el amarillo
+   institucional para el beneficio de caja: es literalmente lo que aporta
+   Colsubsidio, así que lleva su color. */
+.as-seg--entorno {
+  background: #0067b1;
+}
+.as-seg--capacidad {
+  background: #4a9fd4;
+}
+.as-seg--asequibilidad {
+  background: #93c6e6;
+}
+.as-seg--beneficio_caja {
+  background: #ffd000;
+}
+.as-rec__leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 10.5px;
+  color: var(--tinta-suave);
+}
+.as-leyenda {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.as-leyenda i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.as-leyenda b {
+  color: var(--tinta-media);
+  font-variant-numeric: tabular-nums;
 }

@@ -8,6 +8,7 @@
 
 import type { EstadoPlugin } from "../types";
 import { haceCuanto } from "../utils";
+import { Icono } from "./Iconos";
 
 interface Props {
   plugins: EstadoPlugin[];
@@ -33,7 +34,9 @@ export function PluginsPanel({ plugins }: Props) {
         <div className="plugins">
           {plugins.map((p) => (
             <div className="plugin" key={p.id} data-estado={p.estado}>
-              <span className="plugin__icon">{p.icono}</span>
+              <span className="plugin__icon">
+                <Icono nombre={p.icono} tamano={19} />
+              </span>
               <div className="plugin__body">
                 <div className="plugin__name">{p.nombre}</div>
                 <div className="plugin__detail">

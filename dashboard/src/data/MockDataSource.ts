@@ -281,14 +281,14 @@ export class MockDataSource implements DataSource {
       {
         id: "supabase",
         nombre: "Supabase",
-        icono: "🗄️",
+        icono: "supabase",
         estado: "sin_datos",
         detalle: "Proyecto pendiente (se crea mañana)",
       },
       {
         id: "dapta",
         nombre: "Dapta",
-        icono: "📞",
+        icono: "dapta",
         estado: this.ultimoEventoDaptaTs ? "viva" : enDapta ? "viva" : "sin_datos",
         detalle: "Webhook de voz/WhatsApp",
         ultimoEventoTs: this.ultimoEventoDaptaTs,
@@ -296,14 +296,14 @@ export class MockDataSource implements DataSource {
       {
         id: "backend",
         nombre: "Backend de reglas",
-        icono: "🖥️",
+        icono: "backend",
         estado: "viva",
         detalle: "H1–H10 respondiendo (mock)",
       },
       {
         id: "clustering",
         nombre: "Clustering",
-        icono: "🧩",
+        icono: "modelo",
         estado: "viva",
         detalle: "Modelo mock (Santiago DS lo reemplaza)",
       },

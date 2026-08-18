@@ -6,7 +6,9 @@
  * ENTIENDA en vez de verse como movimiento aleatorio.
  */
 
-import { hora } from "../utils";
+// Tiempo relativo y no `hora`: el registro mezcla eventos de hace minutos con
+// otros de hace semanas, y "01:04 a.m." no distingue cuál es cuál.
+import { antiguedad } from "../utils";
 
 export interface EntradaLog {
   id: string;
@@ -33,7 +35,7 @@ export function ActivityLog({ entradas }: Props) {
         <ul className="log">
           {entradas.map((e) => (
             <li className="log__row" key={e.id} data-tono={e.tono}>
-              <span className="log__time">{hora(e.ts)}</span>
+              <span className="log__time">{antiguedad(e.ts)}</span>
               <span className="log__dot" />
               <span className="log__text">{e.texto}</span>
             </li>

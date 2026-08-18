@@ -87,16 +87,17 @@ export type EstadoNodo = "inactivo" | "en_proceso" | "completado" | "error";
 export interface Pieza {
   id: PiezaId;
   nombre: string;
+  /** Id del icono en components/Iconos.tsx (no un emoji). */
   icono: string;
   descripcion: string; // qué hace, en una línea
 }
 
 export const PIEZAS: Pieza[] = [
-  { id: "bowl", nombre: "Bowl", icono: "🥗", descripcion: "Captura señales del cliente" },
-  { id: "backend", nombre: "Backend", icono: "🖥️", descripcion: "Reglas H1–H10 + orquesta" },
-  { id: "clustering", nombre: "Clustering", icono: "🧩", descripcion: "Asigna perfil y recomienda" },
-  { id: "dapta", nombre: "Dapta", icono: "📞", descripcion: "Llama y califica el lead" },
-  { id: "asesor", nombre: "Asesor", icono: "📄", descripcion: "Recibe la ficha de traspaso" },
+  { id: "bowl", nombre: "Bowl", icono: "bowl", descripcion: "Captura señales del cliente" },
+  { id: "backend", nombre: "Backend", icono: "backend", descripcion: "Reglas H1–H10 + orquesta" },
+  { id: "clustering", nombre: "Clustering", icono: "clustering", descripcion: "Asigna perfil y recomienda" },
+  { id: "dapta", nombre: "Dapta", icono: "dapta", descripcion: "Llama y califica el lead" },
+  { id: "asesor", nombre: "Asesor", icono: "asesor", descripcion: "Recibe la ficha de traspaso" },
 ];
 
 export interface HitoTimeline {

@@ -18,6 +18,7 @@ import type {
   Lead,
   LeadEvent,
   PiezaId,
+  SaludConexion,
 } from "../types";
 import type { DataSource, Desuscribir } from "./DataSource";
 
@@ -25,6 +26,10 @@ const TABLA = "reto_vivienda_leads";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+// Se comprueba de verdad contra /health. Configurable por si cambia el host.
+const BACKEND_URL =
+  (import.meta.env.VITE_BACKEND_URL as string) ||
+  "https://hackaton-colsubsidio-30x-frontend.onrender.com";
 
 /** Mapea una fila de la tabla al tipo Lead del dashboard. */
 function mapFila(f: Record<string, any>): Lead {
@@ -63,7 +68,6 @@ function mapFila(f: Record<string, any>): Lead {
 
 export class SupabaseDataSource implements DataSource {
   private client: SupabaseClient;
-  private ultimoEventoTs: number | null = null;
 
   constructor() {
     if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -97,7 +101,6 @@ export class SupabaseDataSource implements DataSource {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: TABLA },
         (payload) => {
-          this.ultimoEventoTs = Date.now();
           const lead = mapFila(payload.new as Record<string, any>);
           callback({
             tipo: "nuevo",
@@ -110,7 +113,6 @@ export class SupabaseDataSource implements DataSource {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: TABLA },
         (payload) => {
-          this.ultimoEventoTs = Date.now();
           const lead = mapFila(payload.new as Record<string, any>);
           const ultimo = lead.timeline[lead.timeline.length - 1];
           callback({ tipo: "actualizado", lead, nota: ultimo?.nota });
@@ -134,46 +136,98 @@ export class SupabaseDataSource implements DataSource {
   }
 
   async obtenerEstadoPlugins(): Promise<EstadoPlugin[]> {
-    // La salud de Supabase se infiere de poder consultar la tabla.
+    // Todo lo de aquí se COMPRUEBA. La versión anterior traía textos fijos que
+    // envejecieron mal ("backend aún no desplegado", "modelo pendiente") y
+    // acabaron afirmando en pantalla lo contrario de lo que pasaba. Un panel de
+    // estado que miente es peor que no tenerlo: se deja de mirar.
     let supabaseViva = true;
+    let totalLeads: number | null = null;
     try {
-      const { error } = await this.client
+      const { error, count } = await this.client
         .from(TABLA)
         .select("id", { count: "exact", head: true });
       supabaseViva = !error;
+      totalLeads = count ?? null;
     } catch {
       supabaseViva = false;
+    }
+
+    // Último resultado real de Dapta: dice si el webhook sigue llegando.
+    let ultimoDapta: number | null = null;
+    let calificados = 0;
+    try {
+      const { data } = await this.client
+        .from(TABLA)
+        .select("updated_at")
+        .not("resultado_dapta", "is", null)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      if (data?.length) ultimoDapta = new Date(data[0].updated_at).getTime();
+      const { count } = await this.client
+        .from(TABLA)
+        .select("id", { count: "exact", head: true })
+        .not("calificacion", "is", null);
+      calificados = count ?? 0;
+    } catch {
+      /* se queda sin dato; no es motivo para tumbar el panel */
+    }
+
+    // Ping real al backend. Es una llamada de red que puede tardar (Render
+    // free duerme el servicio), así que se acota con AbortController para no
+    // dejar el panel colgado esperando.
+    let backend: SaludConexion = "sin_datos";
+    if (BACKEND_URL) {
+      try {
+        const corte = new AbortController();
+        const t = setTimeout(() => corte.abort(), 4000);
+        const r = await fetch(`${BACKEND_URL}/health`, { signal: corte.signal });
+        clearTimeout(t);
+        backend = r.ok ? "viva" : "caida";
+      } catch {
+        // Puede ser que esté caído o simplemente despertando: no se afirma
+        // "caído" con certeza, se dice que no respondió.
+        backend = "sin_datos";
+      }
     }
 
     return [
       {
         id: "supabase",
         nombre: "Supabase",
-        icono: "🗄️",
+        icono: "supabase",
         estado: supabaseViva ? "viva" : "caida",
-        detalle: `Tabla ${TABLA} · Realtime`,
-      },
-      {
-        id: "dapta",
-        nombre: "Dapta",
-        icono: "📞",
-        estado: this.ultimoEventoTs ? "viva" : "sin_datos",
-        detalle: "Webhook de voz/WhatsApp (pendiente backend)",
-        ultimoEventoTs: this.ultimoEventoTs,
+        detalle: supabaseViva
+          ? `${TABLA} · ${totalLeads ?? "?"} leads · Realtime`
+          : "sin respuesta",
       },
       {
         id: "backend",
         nombre: "Backend de reglas",
-        icono: "🖥️",
-        estado: "sin_datos",
-        detalle: "Aún no desplegado (H1–H10 en stub)",
+        icono: "backend",
+        estado: backend,
+        detalle:
+          backend === "viva"
+            ? "FastAPI en Render · /health OK"
+            : backend === "caida"
+              ? "responde con error"
+              : "sin respuesta (puede estar despertando)",
       },
       {
-        id: "clustering",
-        nombre: "Clustering",
-        icono: "🧩",
-        estado: "sin_datos",
-        detalle: "Modelo pendiente (Santiago DS)",
+        id: "dapta",
+        nombre: "Dapta · Manuela",
+        icono: "dapta",
+        estado: ultimoDapta ? "viva" : "sin_datos",
+        detalle: ultimoDapta
+          ? `webhook post-call · ${calificados} leads calificados`
+          : "sin resultados de llamada todavía",
+        ultimoEventoTs: ultimoDapta,
+      },
+      {
+        id: "modelo",
+        nombre: "Modelo de recomendaciones",
+        icono: "modelo",
+        estado: totalLeads ? "viva" : "sin_datos",
+        detalle: "31 proyectos reales · match_score por lead",
       },
     ];
   }

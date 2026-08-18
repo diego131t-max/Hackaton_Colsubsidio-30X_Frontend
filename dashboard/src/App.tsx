@@ -21,7 +21,6 @@ const MAX_LOG = 40;
 export function App() {
   const [leads, setLeads] = useState<Map<string, Lead>>(new Map());
   const [plugins, setPlugins] = useState<EstadoPlugin[]>([]);
-  const [log, setLog] = useState<EntradaLog[]>([]);
   const [seleccionadoId, setSeleccionadoId] = useState<string | null>(null);
   const [tick, setTick] = useState(0); // fuerza refresco de los "hace Xs"
   // Dos vistas sobre los MISMOS datos: "monitor" responde si el pipeline
@@ -38,26 +37,9 @@ export function App() {
 
   // Suscripción al stream de leads.
   useEffect(() => {
-    let n = 0;
     const desuscribir = dataSource.suscribirseALeads((evento) => {
       const lead = evento.lead;
       setLeads((prev) => new Map(prev).set(lead.id, lead));
-
-      if (evento.nota) {
-        const tono: EntradaLog["tono"] =
-          lead.estadoNodo === "error"
-            ? "error"
-            : lead.nodoActual === "asesor"
-              ? "ok"
-              : "info";
-        const entrada: EntradaLog = {
-          id: `log-${Date.now()}-${n++}`,
-          ts: Date.now(),
-          texto: evento.nota,
-          tono,
-        };
-        setLog((prev) => [entrada, ...prev].slice(0, MAX_LOG));
-      }
     });
     return desuscribir;
   }, []);
@@ -103,13 +85,44 @@ export function App() {
   }, []);
 
   const lista = [...leads.values()];
+
+  // El registro se DERIVA de los timelines, no se acumula solo con lo que pasa
+  // mientras la pestaña está abierta. Antes salía vacío en cada recarga aunque
+  // hubiera 111 leads con historia: el panel más grande de la pantalla no decía
+  // nada. Los eventos en vivo entran por la misma vía, porque actualizan el lead.
+  const entradasLog: EntradaLog[] = lista
+    .flatMap((lead) => {
+      const ultimo = lead.timeline[lead.timeline.length - 1];
+      if (!ultimo?.nota) return [];
+      const nombre = `${lead.senal?.nombre ?? ""} ${lead.senal?.apellido ?? ""}`.trim();
+      return [
+        {
+          id: `${lead.id}-${lead.timeline.length}`,
+          ts: ultimo.timestamp,
+          texto: nombre ? `${nombre}: ${ultimo.nota}` : ultimo.nota,
+          tono:
+            lead.estadoNodo === "error"
+              ? ("error" as const)
+              : lead.nodoActual === "asesor"
+                ? ("ok" as const)
+                : ("info" as const),
+        },
+      ];
+    })
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, MAX_LOG);
   const seleccionado = seleccionadoId ? leads.get(seleccionadoId) ?? null : null;
 
-  // KPIs de la operación.
-  const activos = lista.filter((l) => l.nodoActual !== "asesor").length;
-  const enDapta = lista.filter((l) => l.nodoActual === "dapta").length;
+  // KPIs del embudo. Se miden cosas que de verdad ocurrieron, no estados
+  // instantáneos: "en llamada (Dapta)" contaba los que están parados en el nodo
+  // dapta, que en la práctica son los que NO contestaron — justo lo contrario de
+  // lo que sugería la etiqueta.
+  const captados = lista.length;
+  const contactados = lista.filter((l) => l.resultadoDapta != null).length;
   const calientes = lista.filter((l) => l.calificacion === "caliente").length;
   const entregados = lista.filter((l) => l.nodoActual === "asesor").length;
+  const pct = (n: number) =>
+    captados ? `${Math.round((n / captados) * 100)}% del total` : "—";
 
   return (
     <div className={`app${vista === "asesor" ? " vista-asesor" : ""}`} data-tick={tick}>
@@ -159,22 +172,26 @@ export function App() {
         <>
         <div className="kpis">
           <div className="kpi">
-            <span className="kpi__num">{activos}</span>
-            <span className="kpi__lbl">Leads activos</span>
+            <span className="kpi__num">{captados}</span>
+            <span className="kpi__lbl">Leads captados</span>
+            <span className="kpi__sub">formulario completado</span>
           </div>
           <div className="kpi">
-            <span className="kpi__num">{enDapta}</span>
-            <span className="kpi__lbl">En llamada (Dapta)</span>
+            <span className="kpi__num">{contactados}</span>
+            <span className="kpi__lbl">Contactados por Manuela</span>
+            <span className="kpi__sub">{pct(contactados)}</span>
           </div>
           <div className="kpi">
             <span className="kpi__num" data-cal="caliente">
               {calientes}
             </span>
             <span className="kpi__lbl">Calientes</span>
+            <span className="kpi__sub">listos para cerrar</span>
           </div>
           <div className="kpi">
             <span className="kpi__num">{entregados}</span>
-            <span className="kpi__lbl">Fichas entregadas</span>
+            <span className="kpi__lbl">Fichas al asesor</span>
+            <span className="kpi__sub">{pct(entregados)}</span>
           </div>
         </div>
 
@@ -185,7 +202,7 @@ export function App() {
         />
 
         <div className="grid">
-          <ActivityLog entradas={log} />
+          <ActivityLog entradas={entradasLog} />
           <PluginsPanel plugins={plugins} />
         </div>
         </>
