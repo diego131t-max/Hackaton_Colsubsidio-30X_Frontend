@@ -36,18 +36,28 @@ function mapFila(f: Record<string, any>): Lead {
     estadoNodo: (f.estado_nodo ?? "completado") as EstadoNodo,
     clusterId: f.cluster_id ?? undefined,
     proyectosRecomendados: f.proyectos_recomendados ?? [],
+    recomendacionesDetalle: f.recomendaciones_detalle ?? [],
     calificacion: (f.calificacion ?? undefined) as Calificacion | undefined,
     resultadoDapta: f.resultado_dapta ?? undefined,
-    timeline: (f.timeline ?? []).map(
-      (h: any): HitoTimeline => ({
+    timeline: (f.timeline ?? []).map((h: any): HitoTimeline => {
+      // `ts` lo escribe el backend desde que se añadió la marca de tiempo. Los
+      // eventos anteriores no lo traen: en vez de inventarles una hora se cae a
+      // created_at y se marca timestampReal=false para que la vista lo diga.
+      const crudo = h.ts ?? h.timestamp ?? null;
+      const real = crudo != null && !Number.isNaN(new Date(crudo).getTime());
+      return {
         pieza: h.pieza,
         estado: h.estado,
-        // el timeline en DB no guarda epoch; usamos updated_at como referencia
-        timestamp: h.timestamp ?? new Date(f.updated_at ?? Date.now()).getTime(),
+        timestamp: real
+          ? new Date(crudo).getTime()
+          : new Date(f.created_at ?? f.updated_at ?? Date.now()).getTime(),
+        timestampReal: real,
         nota: h.nota,
-      }),
-    ),
+      };
+    }),
+    createdAt: new Date(f.created_at ?? f.updated_at ?? Date.now()).getTime(),
     updatedAt: new Date(f.updated_at ?? f.created_at ?? Date.now()).getTime(),
+    agendadoPara: f.agendado_para ? new Date(f.agendado_para).getTime() : null,
   };
 }
 

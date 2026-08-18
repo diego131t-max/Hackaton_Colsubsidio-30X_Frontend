@@ -111,9 +111,11 @@ function crearLead(perfil: (typeof PERFILES)[number], idx: number): Lead {
         pieza: "bowl",
         estado: "completado",
         timestamp: ahora,
+        timestampReal: true,
         nota: "Completó el bowl",
       },
     ],
+    createdAt: ahora,
     updatedAt: ahora,
   };
 }
@@ -204,7 +206,7 @@ export class MockDataSource implements DataSource {
       estadoNodo: estado,
       timeline: [
         ...lead.timeline,
-        { pieza: siguiente, estado, timestamp: ahora, nota },
+        { pieza: siguiente, estado, timestamp: ahora, timestampReal: true, nota },
       ],
       updatedAt: ahora,
     };

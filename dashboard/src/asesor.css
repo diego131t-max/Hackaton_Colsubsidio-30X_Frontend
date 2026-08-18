@@ -1,0 +1,660 @@
+/* ==========================================================================
+   Vista ASESOR — ficha de traspaso (H9)
+   ==========================================================================
+   Tema CLARO y sobrio, deliberadamente distinto del monitor (que es una "sala
+   de control" oscura). Son dos oficios distintos: el monitor lo mira alguien de
+   operación durante segundos; esta ficha la lee un asesor mientras habla por
+   teléfono con una persona, y ahí lo que manda es legibilidad, no espectáculo.
+
+   PALETA: extraída del logo oficial de Colsubsidio (logo-colsubsidio.svg),
+   no inventada ni aproximada a ojo:
+       #0067B1  azul institucional
+       #FFD000  amarillo institucional
+   Los niveles de lead reusan esa pareja donde el significado coincide —frío es
+   azul, tibio es amarillo— y solo "caliente" añade un rojo cálido, porque la
+   marca no tiene un color que comunique urgencia.
+   ========================================================================== */
+
+.vista-asesor {
+  --az: #0067b1;
+  --az-oscuro: #00558f;
+  --az-tenue: #e8f2fa;
+  --am: #ffd000;
+  --am-tenue: #fff8d6;
+
+  --papel: #f4f6f9;
+  --sup: #ffffff;
+  --linea: #e2e7ee;
+  --linea-fuerte: #cfd6e0;
+  --tinta: #1c2430;
+  --tinta-media: #5a6675;
+  --tinta-suave: #8b95a3;
+
+  --caliente: #d6402c;
+  --caliente-tenue: #fdecea;
+  --tibio: #ffd000;
+  --tibio-tinta: #4a3b00;
+  --tibio-tenue: #fff8d6;
+  --frio: #0067b1;
+  --frio-tenue: #e8f2fa;
+  --nulo: #6b7684;
+  --nulo-tenue: #eef0f3;
+
+  --r: 12px;
+  --r-sm: 8px;
+}
+
+/* El body del monitor es azul-noche; con la vista de asesor activa el fondo
+   pasa a papel claro. Se hace en body y no solo en el contenedor para que el
+   área fuera del layout (rebote de scroll) no muestre el tema oscuro. */
+body.tema-asesor {
+  background: #f4f6f9;
+  color: #1c2430;
+}
+
+/* --- Layout maestro-detalle ---------------------------------------------- */
+.as-wrap {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .as-wrap {
+    grid-template-columns: 1fr;
+  }
+  .as-lista__scroll {
+    max-height: 320px;
+  }
+}
+
+/* --- Lista --------------------------------------------------------------- */
+.as-lista {
+  background: var(--sup);
+  border: 1px solid var(--linea);
+  border-radius: var(--r);
+  overflow: hidden;
+  position: sticky;
+  top: 16px;
+}
+.as-lista__cab {
+  padding: 12px;
+  border-bottom: 1px solid var(--linea);
+  display: grid;
+  gap: 10px;
+}
+.as-buscar {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 13px;
+  color: var(--tinta);
+  background: var(--papel);
+}
+.as-buscar:focus-visible {
+  outline: 2px solid var(--az);
+  outline-offset: 1px;
+  background: var(--sup);
+}
+
+.as-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.as-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 999px;
+  background: var(--sup);
+  color: var(--tinta-media);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.as-filtro:hover {
+  border-color: var(--az);
+  color: var(--az);
+}
+.as-filtro--on {
+  background: var(--az);
+  border-color: var(--az);
+  color: #fff;
+}
+.as-filtro__n {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.as-lista__scroll {
+  max-height: calc(100vh - 210px);
+  overflow-y: auto;
+}
+
+.as-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--linea);
+  border-left: 3px solid transparent;
+  background: var(--sup);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.as-fila:hover {
+  background: var(--papel);
+}
+.as-fila--activa {
+  background: var(--az-tenue);
+  border-left-color: var(--az);
+}
+.as-fila__cuerpo {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.as-fila__nombre {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--tinta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.as-fila__meta {
+  font-size: 11.5px;
+  color: var(--tinta-suave);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.as-fila__derecha {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.as-fila__tiempo {
+  font-size: 10.5px;
+  color: var(--tinta-suave);
+}
+
+/* Punto de color: redundante con el chip a propósito. El color solo nunca debe
+   ser el único portador del significado (daltonismo), pero como refuerzo del
+   texto acelera mucho el barrido visual de la lista. */
+.as-punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.as-punto--caliente {
+  background: var(--caliente);
+}
+.as-punto--tibio {
+  background: var(--tibio);
+}
+.as-punto--frio {
+  background: var(--frio);
+}
+.as-punto--sin_respuesta {
+  background: var(--nulo);
+}
+
+.as-chip {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.as-chip--caliente {
+  background: var(--caliente-tenue);
+  color: var(--caliente);
+}
+.as-chip--tibio {
+  background: var(--tibio-tenue);
+  color: var(--tibio-tinta);
+}
+.as-chip--frio {
+  background: var(--frio-tenue);
+  color: var(--frio);
+}
+.as-chip--sin_respuesta {
+  background: var(--nulo-tenue);
+  color: var(--nulo);
+}
+
+/* --- Panel de detalle ---------------------------------------------------- */
+.as-panel {
+  background: var(--sup);
+  border: 1px solid var(--linea);
+  border-radius: var(--r);
+  min-height: 60vh;
+}
+.as-panel__vacio {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+  color: var(--tinta-suave);
+  font-size: 14px;
+}
+
+.as-detalle {
+  padding: 20px clamp(16px, 2.4vw, 26px) 28px;
+}
+
+.as-aviso {
+  margin-bottom: 16px;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  background: var(--am-tenue);
+  border: 1px solid var(--am);
+  color: var(--tibio-tinta);
+  font-size: 12.5px;
+}
+
+/* Cabecera: identidad a la izquierda, nivel a la derecha. El badge es el
+   elemento más pesado de la pantalla porque es lo que decide la prioridad. */
+.as-cab {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--am);
+}
+.as-cab__nombre {
+  margin: 0 0 5px;
+  font-size: clamp(20px, 2.6vw, 26px);
+  line-height: 1.15;
+  color: var(--tinta);
+  letter-spacing: -0.01em;
+}
+.as-cab__contacto {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 13px;
+  color: var(--tinta-media);
+}
+.as-cab__contacto a {
+  color: var(--az);
+  text-decoration: none;
+}
+.as-cab__contacto a:hover {
+  text-decoration: underline;
+}
+.as-cab__origen {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--tinta-suave);
+}
+.as-cab__der {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  text-align: right;
+}
+
+.as-badge {
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.as-badge--caliente {
+  background: var(--caliente);
+  color: #fff;
+}
+.as-badge--tibio {
+  background: var(--tibio);
+  color: var(--tibio-tinta);
+}
+.as-badge--frio {
+  background: var(--frio);
+  color: #fff;
+}
+.as-badge--sin_respuesta {
+  background: var(--nulo-tenue);
+  color: var(--nulo);
+  border: 1px solid var(--linea-fuerte);
+}
+.as-badge__accion {
+  font-size: 11.5px;
+  color: var(--tinta-media);
+  max-width: 22ch;
+}
+
+.as-justificacion {
+  margin: 12px 0 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--tinta);
+  padding-left: 11px;
+  border-left: 3px solid var(--linea-fuerte);
+}
+
+/* --- Bloques ------------------------------------------------------------- */
+.as-bloque {
+  margin-bottom: 22px;
+}
+.as-h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--tinta-suave);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.as-h3__nota {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--tinta-suave);
+}
+
+.as-dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+.as-dl > div {
+  min-width: 0;
+}
+.as-dl__ancho {
+  grid-column: 1 / -1;
+}
+.as-dl dt {
+  font-size: 11px;
+  color: var(--tinta-suave);
+  margin-bottom: 2px;
+}
+.as-dl dd {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--tinta);
+  overflow-wrap: anywhere;
+}
+.as-vencida {
+  color: var(--caliente);
+  font-weight: 600;
+}
+
+.as-resumen {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--tinta);
+  background: var(--papel);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-sm);
+  padding: 13px 15px;
+}
+
+.as-vacio {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tinta-suave);
+  font-style: italic;
+}
+.as-vacio--lista {
+  padding: 22px 14px;
+  text-align: center;
+  font-style: normal;
+}
+
+.as-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 12px;
+}
+.as-tag {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--az-tenue);
+  color: var(--az-oscuro);
+}
+
+/* --- Bloque sensible -----------------------------------------------------
+   Tratamiento deliberadamente APAGADO: sin color de marca, sin relleno vivo,
+   colapsado por defecto. Debe leerse como un cajón cerrado, no como una
+   tarjeta más del expediente. */
+.as-sensible {
+  margin-bottom: 22px;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--r-sm);
+  background: #fafbfc;
+  overflow: hidden;
+}
+.as-sensible__cab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--tinta-media);
+}
+.as-sensible__cab:hover {
+  background: #f2f4f7;
+}
+.as-sensible__candado {
+  font-size: 14px;
+  opacity: 0.55;
+}
+.as-sensible__titulo {
+  flex: 1;
+  display: grid;
+  gap: 1px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tinta-media);
+}
+.as-sensible__nota {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--tinta-suave);
+}
+.as-sensible__toggle {
+  font-size: 11.5px;
+  color: var(--az);
+  font-weight: 600;
+}
+.as-sensible__cuerpo {
+  padding: 4px 14px 15px;
+  border-top: 1px dashed var(--linea-fuerte);
+}
+.as-dl--sensible {
+  margin-top: 12px;
+}
+.as-dl--sensible dd {
+  color: var(--tinta-media);
+}
+
+/* --- Recomendaciones con barra de match ---------------------------------- */
+.as-recs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 11px;
+}
+.as-rec {
+  border: 1px solid var(--linea);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  background: var(--sup);
+}
+.as-rec--top {
+  border-color: var(--az);
+  background: var(--az-tenue);
+}
+.as-rec__cab {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.as-rec__nombre {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tinta);
+}
+.as-rec__nombre a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--linea-fuerte);
+}
+.as-rec__nombre a:hover {
+  color: var(--az);
+  border-bottom-color: var(--az);
+}
+.as-rec__score {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--az);
+  font-variant-numeric: tabular-nums;
+}
+.as-rec__barra {
+  height: 6px;
+  border-radius: 999px;
+  background: #dde3ea;
+  margin: 7px 0 6px;
+  overflow: hidden;
+}
+.as-rec__barra > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--az), #3f9ad6);
+}
+.as-rec--top .as-rec__barra {
+  background: #cfe0ef;
+}
+.as-rec__pie {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10.5px;
+  color: var(--tinta-suave);
+}
+.as-rec__desglose {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* --- Timeline ------------------------------------------------------------ */
+.as-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 6px;
+  display: grid;
+  gap: 0;
+}
+.as-timeline__item {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  padding-bottom: 14px;
+  position: relative;
+}
+.as-timeline__item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 13px;
+  bottom: 0;
+  width: 2px;
+  background: var(--linea);
+}
+.as-timeline__marca {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 4px;
+  background: var(--az);
+  outline: 3px solid var(--sup);
+}
+.as-timeline__item--error .as-timeline__marca {
+  background: var(--caliente);
+}
+.as-timeline__item--en_proceso .as-timeline__marca {
+  background: var(--am);
+}
+.as-timeline__nota {
+  font-size: 13px;
+  color: var(--tinta);
+}
+.as-timeline__ts {
+  font-size: 11px;
+  color: var(--tinta-suave);
+  margin-top: 1px;
+}
+.as-timeline__aprox {
+  font-style: italic;
+  opacity: 0.85;
+}
+
+/* Foco visible coherente en toda la vista: el asesor puede navegar con teclado
+   mientras sostiene el teléfono. */
+.vista-asesor button:focus-visible,
+.vista-asesor a:focus-visible {
+  outline: 2px solid var(--az);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Proyecto que la persona eligió: puede no coincidir con el mejor puntuado, y
+   esa discrepancia es justamente lo que el asesor necesita ver. */
+.as-rec--elegido {
+  border-color: var(--am);
+  box-shadow: inset 3px 0 0 var(--am);
+}
+.as-rec__elegido {
+  margin-left: 7px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--am);
+  color: var(--tibio-tinta);
+  vertical-align: middle;
+}
+.as-nota-elegido {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--tinta-media);
+  padding: 8px 11px;
+  background: var(--am-tenue);
+  border-radius: var(--r-sm);
+}

@@ -713,3 +713,51 @@ body {
     transition-duration: 0.2s !important;
   }
 }
+
+/* --- Conmutador de vistas (Monitor / Ficha del asesor) --------------------
+   Vive en index.css y no en asesor.css porque se muestra en AMBAS vistas: si
+   estuviera en el tema claro, desaparecería al volver al monitor. */
+.vista-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  margin-left: auto;
+  margin-right: 12px;
+}
+.vista-switch__b {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.vista-switch__b:hover {
+  color: var(--text);
+}
+.vista-switch__b--on {
+  background: #0067b1; /* azul institucional Colsubsidio (logo oficial) */
+  color: #fff;
+  font-weight: 600;
+}
+/* Con el tema claro activo, el conmutador también se aclara. */
+body.tema-asesor .vista-switch {
+  background: #fff;
+  border-color: #cfd6e0;
+}
+body.tema-asesor .vista-switch__b {
+  color: #5a6675;
+}
+body.tema-asesor .topbar .brand__title {
+  color: #1c2430;
+}
+body.tema-asesor .topbar .brand__sub,
+body.tema-asesor .live-pill {
+  color: #5a6675;
+}
