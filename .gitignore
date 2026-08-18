@@ -61,3 +61,11 @@ modelo_recomendaciones/recomendaciones.json
 Thumbs.db
 .idea/
 .vscode/
+
+# Excepción al `build/` de arriba (que apunta a bundles de JS): los prompts
+# ensamblados de Dapta SÍ se versionan. Son lo que literalmente se pega en la
+# plataforma, así que tenerlos en el repo es lo único que permite revisar en un
+# diff qué va a decir el agente por teléfono antes de publicarlo — y ver qué
+# cambió entre una versión y la siguiente.
+!dapta/build/
+!dapta/build/*.txt
