@@ -95,6 +95,32 @@ falla de forma visible en vez de sonar plausible y calificar mal a un lead.
 
 Se abren en `https://app.dapta.ai/agents-studio/voice-agents/<id>`.
 
+Al pegar, el editor de Dapta convierte las vinetas `- ` en parrafos sueltos.
+Verificado que NO se pierde contenido: 272 y 276 lineas con contenido, cero
+faltantes y cero anadidas respecto al archivo de `build/`. Por eso comparar
+tamanos en bruto da un falso negativo (~72 caracteres de diferencia): hay que
+comparar los conjuntos de lineas.
+
+### Campos de extraccion: el otro punto donde se corta el circuito
+
+Pegar el prompt NO basta. El prompt le pide al agente que produzca
+`calificacion_lead`, `resumen_llamada` y los demas, pero Dapta solo incluye en
+`custom_analysis_data` los campos **declarados en el agente**
+(`post_call_analysis_data`). Si estan vacios: la llamada ocurre, el webhook
+responde 200, el lead avanza y el asesor recibe la ficha vacia. Es el fallo
+silencioso contra el que avisa `nucleo/salida-estructurada.md`.
+
+Los dos agentes llevan los 10 campos del contrato, con los nombres exactos que
+parsea `ResultadoCalificacionDapta`, y el webhook post-call apuntando a:
+
+```
+https://hackaton-colsubsidio-30x-frontend.onrender.com/webhooks/dapta/resultado
+```
+
+Esto SI se puede hacer por MCP (`preview_update_voice_agent` ->
+`commit_update_voice_agent`): el payload son unos pocos KB y pasa el limite del
+WAF. Lo unico que obliga a la interfaz es el prompt.
+
 Esto no contradice la regla de arriba de no editar en la plataforma: la fuente
 de verdad sigue siendo el repo. Lo que se pega es la salida de `build/`, nunca
 texto escrito en Dapta.
@@ -155,8 +181,9 @@ pegarlo en la configuración de ambos.
 - [x] Crear la cuenta nueva de Dapta y generar su API key
 - [x] Reconfigurar el MCP (quedo como `dapta-colsubsidio`, en paralelo al viejo)
 - [x] Crear los dos agentes de voz con los payloads de arriba
-- [ ] Pegar a mano el prompt de `build/` en cada agente (ver limite de 8 KB)
-- [ ] Pegar la URL del post-call webhook en AMBOS agentes
+- [x] Pegar a mano el prompt de `build/` en cada agente (ver limite de 8 KB)
+- [x] Pegar la URL del post-call webhook en AMBOS agentes
+- [x] Declarar los 10 campos de `post_call_analysis_data` en AMBOS agentes
 - [ ] Aprovisionar un número saliente que marque a móviles de Colombia
 - [ ] Crear los dos flows y poner sus webhooks en Render
 - [ ] Conectar la línea de WhatsApp Business (flujo Meta, lento) y crear los dos agentes de texto
