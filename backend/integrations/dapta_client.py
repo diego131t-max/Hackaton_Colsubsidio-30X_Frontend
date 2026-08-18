@@ -15,9 +15,14 @@ Puede avanzar EN PARALELO con el resto del sistema.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend import config
+# Vive aqui y no en supabase_client porque ese modulo ya importa de este:
+# ponerlo al reves crea un ciclo de imports.
+TZ_BOGOTA = timezone(timedelta(hours=-5))
+
 from backend.models.schemas import (
     FichaTraspaso,
     ResultadoCalificacionDapta,
@@ -81,6 +86,8 @@ async def disparar_llamada(
         ----------------------------------------------------------------------
         nombre                   <-  f"{senal.nombre} {senal.apellido}"
         telefono                 <-  senal.telefono_movil
+        tipo_vivienda            <-  senal.tipo_vivienda
+        current_time             <-  hora actual en America/Bogota
         proyecto                 <-  proyecto_interes | top recomendado
         afiliado                 <-  senal.afiliado
         rango_ingreso            <-  senal.ingresos_hogar_rango
@@ -114,6 +121,14 @@ async def disparar_llamada(
         # E.164 obligatorio para que Dapta pueda marcar (to_number).
         "telefono": normalizar_telefono_e164(senal.telefono_movil),
         "proyecto": proyecto_interes or proyecto_top,
+        # El prompt usa {{tipo_vivienda}} y {{current_time}}. Una variable que
+        # el flow no resuelve NO queda vacia: el agente la PRONUNCIA literal en
+        # la llamada. Por eso todo lo que el prompt referencia tiene que salir
+        # de aqui, aunque parezca redundante.
+        "tipo_vivienda": senal.tipo_vivienda,
+        # current_time ancla el agendamiento ("proximo dia habil"): sin hora de
+        # Bogota propondria citas en la zona horaria del servidor.
+        "current_time": datetime.now(TZ_BOGOTA).strftime("%Y-%m-%d %H:%M"),
         # Se sigue enviando por compatibilidad con el flow actual, pero los
         # agentes nuevos NO ramifican por este campo: ya saben con quién
         # hablan porque el backend los eligió por él.

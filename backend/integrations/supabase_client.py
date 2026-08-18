@@ -18,14 +18,13 @@ from typing import Any
 from uuid import UUID
 
 from backend import config
-from backend.integrations.dapta_client import normalizar_telefono_e164
+from backend.integrations.dapta_client import TZ_BOGOTA, normalizar_telefono_e164
 from backend.models.schemas import ResultadoCalificacionDapta, SenalBowl
 
 TABLA = "reto_vivienda_leads"
 
 # Bogotá (UTC-5, sin horario de verano). Manuela agenda "mañana a las 10" pensando
 # en hora local; guardarlo como UTC ingenuo correría toda cita 5 horas.
-TZ_BOGOTA = timezone(timedelta(hours=-5))
 
 
 def ahora_iso() -> str:
