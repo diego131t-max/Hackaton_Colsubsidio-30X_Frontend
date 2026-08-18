@@ -5,7 +5,8 @@
 // Reglas ligadas al brief del hackathon "Reto Vivienda" (Colsubsidio × 30X):
 // - Regla 90/10: Colsubsidio debe vender 90% a afiliados, 10% a no afiliados.
 // - Validar capacidad de compra (ingreso, ahorro) antes de pasar al asesor.
-// - VIS + primera vivienda habilita el subsidio Mi Casa Ya (cierre concreto).
+// - VIS + primera vivienda habilita el subsidio a la cuota inicial (cierre
+//   concreto).
 // - Los leads que no califican HOY no son "innecesarios": se nutren, nunca
 //   se descartan ni se les oculta el catálogo recomendado.
 (function () {
@@ -48,15 +49,17 @@
     // 3. Rango de ingresos: define el universo de proyectos financiables.
     s += ({ '≤2 SMMLV': -4, '2–4 SMMLV': 4, '4–8 SMMLV': 10, '8+ SMMLV': 10 })[answers.ingresos] || 0;
 
-    // 4. VIS + primera vivienda = elegible Mi Casa Ya: combinación concreta y
-    //    accionable de inmediato para un asesor.
+    // 4. VIS + primera vivienda = elegible al subsidio a la cuota inicial:
+    //    combinación concreta y accionable de inmediato para un asesor. Sin
+    //    nombre de programa a propósito — el esquema está en transición y no
+    //    prometemos uno puntual (mismo criterio que el simulador).
     //    Hoy queda inactivo: el quiz ya no pregunta si es la primera vivienda,
     //    así que `answers.primera` no llega. Se conserva la regla porque el
     //    dato puede volver a capturarse (p. ej. ya en la conversación con el
     //    asesor) sin tener que reescribir la calificación.
     if (answers.tipo === 'VIS' && answers.primera === 'Sí') {
       s += 10;
-      notes.push('Elegible Mi Casa Ya');
+      notes.push('Elegible a subsidio de cuota inicial');
     }
 
     // 5. Ingreso bajo pidiendo No VIS: suele indicar que el lead aún no

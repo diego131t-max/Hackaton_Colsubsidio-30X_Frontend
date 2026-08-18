@@ -33,6 +33,13 @@ COMO SE OBTIENEN LOS DATOS (y por que asi)
    vacio— y su icono en field_image. Cada una se mapea ademas a la clave del
    vocabulario de 25 del contrato, para poder cruzarla con el `entorno_deseado`
    que eligio el usuario y resaltar coincidencias en la tarjeta.
+6. Los RECORRIDOS 360 salen de un paragraph "slider_type_b" hermano del de las
+   tipologias (el carrusel "Galeria / Recorrido 360 / Video" de la ficha), no
+   de una fila mas dentro de "modular_tabs". El link real esta un par de
+   parrafos mas abajo en field_360_tours, y ese mismo campo lo reutiliza el
+   item "Video" para un link de YouTube -por eso se filtra por el TITULO
+   ("Recorrido 360" o "Recorrido 360 tipo C") y no por la sola presencia del
+   campo. Ver extraer_recorridos_360.
 
 QUE NO HACE ESTE SCRIPT
 -----------------------
@@ -321,7 +328,11 @@ def etiqueta_tipologia(nombre: str, etapa: str | None) -> str:
 
 
 # --------------------------------------------------------------------------
-# Vocabulario de amenidades del backend: 25 etiquetas EXACTAS.
+# Vocabulario de amenidades del backend: 26 etiquetas EXACTAS ("cancha
+# multiple" se sumo despues de las 25 originales: "Cancha multiple", "Cancha
+# futbol 5" y "Zona sport con cancha multiple" aparecian en 3 proyectos reales
+# sin encajar en ninguna clave existente, a diferencia de "cancha e padel"
+# que es especifica de padel).
 #
 # ⚠️ DUPLICADA en app/js/data.js (pregunta 'entorno_deseado'). Si cambia una,
 # cambia la otra: el backend cruza lo que el usuario elige contra lo que trae
@@ -335,7 +346,7 @@ VOCABULARIO = [
     "spa mascotas", "zona cool", "zona cine", "coworking", "sala vip",
     "zona cafe", "gymnasio", "parqueadero", "zona verde", "parque",
     "sala de juegos", "pista de trote", "voleibol playa", "cancha e padel",
-    "taller de bicicletas", "sauna",
+    "taller de bicicletas", "sauna", "cancha multiple",
 ]
 
 # El sitio publica las amenidades como texto libre: ~250 variantes distintas
@@ -347,6 +358,7 @@ REGLAS_AMENIDAD = [
     (r"spa de mascotas|spa mascotas|pet spa|pet grooming|beauty spa", "spa mascotas"),
     (r"taller de bicicleta|spa de bicicleta|bicicleta|bicicletero", "taller de bicicletas"),
     (r"cancha .*padel|padel", "cancha e padel"),
+    (r"cancha multiple|cancha de futbol|cancha futbol|polideportiv|cancha multifuncional|cancha sintetic|cancha de baloncesto|cancha basquet", "cancha multiple"),
     (r"voleibol", "voleibol playa"),
     (r"sauna|turco", "sauna"),
     (r"piscina|jacuzzi|zona humeda|zonas humedas", "piscina"),
@@ -415,6 +427,89 @@ def extraer_amenidades(recurso: dict) -> list:
                 "_icono_remoto": url_de_media(item.get("field_image")),
             })
     return salida
+
+
+def _valor_recursivo(nodo, clave: str, prof: int = 0):
+    """El primer valor de `clave` a cualquier profundidad bajo `nodo`.
+
+    Mismo patron que `primera_url`, generalizado a cualquier campo: hace falta
+    para `field_360_tours`, que no cuelga directo del item del carrusel sino
+    dos parrafos mas abajo (ver `extraer_recorridos_360`).
+    """
+    if prof > 10 or not isinstance(nodo, (dict, list)):
+        return None
+    if isinstance(nodo, dict):
+        v = nodo.get(clave)
+        if v:
+            return v
+        for k, vv in nodo.items():
+            if k in IGNORAR_AL_BAJAR:
+                continue
+            r = _valor_recursivo(vv, clave, prof + 1)
+            if r:
+                return r
+        return None
+    for x in nodo:
+        r = _valor_recursivo(x, clave, prof + 1)
+        if r:
+            return r
+    return None
+
+
+def extraer_recorridos_360(recurso: dict) -> list:
+    """Recorridos virtuales 360 publicados en la ficha.
+
+    Viven en un `field_section` de tipo `paragraph--slider_type_b` -el
+    carrusel "Galeria / Recorrido 360 / Video" que trae la ficha-, NO dentro
+    del `modular_tabs` de las tipologias: es una pestana hermana, no una fila
+    mas de esa tabla. Cada recorrido es un `slider_type_b_item` cuyo
+    `field_title` es "Recorrido 360" a secas (recorrido del PROYECTO entero,
+    verificado en Araucaria) o "Recorrido 360 tipo C" (de una TIPOLOGIA
+    puntual, verificado en Acanto, que publica uno para el tipo C y otro para
+    el D). El link real -Matterport, Bolivar360, Shape, un visor propio...-
+    esta un par de parrafos mas abajo en `field_360_tours`, asi que se baja
+    recursivamente con `_valor_recursivo` en vez de fijar una ruta.
+
+    OJO: el mismo carrusel reutiliza `field_360_tours` para el item "Video"
+    (ahi guarda un link de YouTube) -verificado en Araucaria, que tiene los
+    tres-. Por eso se filtra por el TITULO ("recorrido 360...") y no por la
+    sola presencia del campo, o el catalogo terminaria ofreciendo un video
+    como si fuera un recorrido.
+    """
+    salida = []
+    for sec in recurso.get("field_section") or []:
+        if not isinstance(sec, dict) or sec.get("type") != "paragraph--slider_type_b":
+            continue
+        for item in sec.get("field_item") or []:
+            if not isinstance(item, dict):
+                continue
+            titulo = (item.get("field_title") or "").strip()
+            if not sin_tildes(titulo).lower().startswith("recorrido 360"):
+                continue
+            url = _valor_recursivo(item, "field_360_tours")
+            if not url or not isinstance(url, str):
+                continue
+            resto = titulo[len("Recorrido 360"):].strip(" ·-")
+            salida.append({
+                # None = recorrido del proyecto entero. Con texto ("tipo C") es
+                # de una tipologia puntual: se cruza por substring contra
+                # tipologia["nombre"] en `mapear()`.
+                "tipologia": resto or None,
+                "url": url.strip(),
+            })
+    return salida
+
+
+def _emparejar_tipologia(sufijo: str, tipologias: list):
+    """'tipo C' -> la tipologia cuyo nombre lo contiene, SI hay una sola.
+
+    Ambiguo o sin match -> None: mejor perder un recorrido que pegarlo a la
+    tipologia equivocada (La Arboleda tiene un "Tipo A" en dos etapas
+    distintas; "tipo A" calzaria con las dos).
+    """
+    clave = sin_tildes(sufijo).lower()
+    candidatas = [t for t in tipologias if clave in sin_tildes(t["nombre"]).lower()]
+    return candidatas[0] if len(candidatas) == 1 else None
 
 
 def extraer_tipologias(recurso: dict) -> list:
@@ -714,6 +809,19 @@ def mapear(recurso: dict, url: str, idx: int) -> dict:
         if precios:
             proyecto["price"] = int(round(min(precios) / 1e6))
 
+    # Recorridos virtuales 360 (Matterport, Bolivar360, visores propios...).
+    # Los "de proyecto" (sin tipologia en el titulo) van en `tour360`; los "de
+    # tipologia" se pegan al `tour360` de la tipologia que casa por nombre, y
+    # si no hay match inequivoco se descartan en silencio (ver
+    # `_emparejar_tipologia`) en vez de adivinar.
+    for r in extraer_recorridos_360(recurso):
+        if r["tipologia"] is None:
+            proyecto.setdefault("tour360", r["url"])
+            continue
+        t = _emparejar_tipologia(r["tipologia"], tipologias)
+        if t is not None:
+            t["tour360"] = r["url"]
+
     # Zonas comunes reales de la ficha ("Este proyecto cuenta con:"). Distinto
     # de `amenities`, que era una curaduria a mano sobre 9 claves con icono
     # propio; estas traen la etiqueta y el icono del sitio.
@@ -863,6 +971,10 @@ def escribir_js(proyectos: list, ruta: str) -> None:
     con_tx = sum(1 for p in proyectos if "transacciones" in p)
     con_tip = sum(1 for p in proyectos if p.get("tipologias"))
     n_tip = sum(len(p.get("tipologias") or []) for p in proyectos)
+    n_tour_proyecto = sum(1 for p in proyectos if p.get("tour360"))
+    n_tour_tipologia = sum(
+        1 for p in proyectos for t in (p.get("tipologias") or []) if t.get("tour360")
+    )
     lineas = [
         "// ARCHIVO GENERADO — no editar a mano.",
         "// Lo produce tools/scrape_proyectos.py desde el sitio real de",
@@ -871,6 +983,7 @@ def escribir_js(proyectos: list, ruta: str) -> None:
         "//   Generado: %s" % hoy,
         "//   Proyectos: %d  (%d con transacciones reales del Excel)" % (len(proyectos), con_tx),
         "//   Tipologias: %d en %d proyectos (los demas no las publican)" % (n_tip, con_tip),
+        "//   Recorridos 360: %d de proyecto + %d de tipologia" % (n_tour_proyecto, n_tour_tipologia),
         "//   Fuente: https://www.colsubsidio.com/vivienda/proyectos",
         "//",
         "// area/hab/banos/price son datos OFICIALES de la ficha de cada",
@@ -887,6 +1000,11 @@ def escribir_js(proyectos: list, ruta: str) -> None:
         "// los limites oficiales de las 20 localidades (datos abiertos de",
         "// Bogota); cuando el texto de la ficha nombra otra localidad, gana el",
         "// texto, porque el mapa suele ser el de la SALA DE VENTAS.",
+        "//",
+        "// `tour360` (link a Matterport/Bolivar360/Shape/etc.) puede venir en el",
+        "// proyecto (recorrido del edificio completo) y/o dentro de cada",
+        "// tipologia (recorrido de ESE apartamento). Ausente si la ficha no",
+        "// publica ninguno, que es lo mas comun.",
         "// Para regenerar:  python tools/scrape_proyectos.py",
         "window.GDF_PROYECTOS = [",
     ]

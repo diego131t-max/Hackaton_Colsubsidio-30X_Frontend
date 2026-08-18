@@ -1,68 +1,69 @@
-// Lógica de la vista superior (lote → losa → habitaciones). Port literal de
-// revealIds/buildRooms desde App.jsx, adaptado para producir cadenas de estilo
-// inline (styleText) en vez de objetos de estilo de React.
+// Cuánto del plano se ve según lo que ya se contestó, y cómo se traduce a los
+// <div> que pinta templates.js.
+//
+// Antes esto era un mapa "pregunta -> qué ambiente se destapa". Ya no puede
+// serlo: las piezas son recortes de una imagen y no sabemos qué ambiente cae en
+// cada una (los nombres van impresos en el plano, y no hacemos OCR). El orden
+// lo decide la geometría — tools/analizar_planos.py lo precalcula por
+// ADYACENCIA desde el centro del plano hacia afuera, que es lo que garantiza
+// que lo revelado sea siempre una mancha conexa y no piezas sueltas flotando.
 (function () {
   'use strict';
 
-  function revealIds(qid, answers) {
-    if (qid === 'tipo') return ['losa'];
-    if (qid === 'ingresos') return ['sala'];
-    if (qid === 'personas') return ['comedor'];
-    if (qid === 'edad') return ['cocina'];
-    // 'zona' es la localidad de Bogotá; la pregunta de municipio se quitó al
-    // dejar la demo solo en Bogotá, y sus dos cuartos se revelan juntos aquí
-    // para que la planta no pierda piezas.
-    if (qid === 'zona') return ['balcon', 'estudio'];
-    if (qid === 'habitaciones') {
-      // El baño lo revelaba la pregunta de ahorro, que ya no existe; va aquí
-      // para que la planta no quede sin baño. El vestier se dejó de mostrar
-      // junto con la pregunta de tipo_inmueble, que tampoco existe ya.
-      var h = answers.habitaciones;
-      var habs = h === '1' ? ['hab1'] : h === '2' ? ['hab1', 'hab2'] : ['hab1', 'hab2', 'hab3'];
-      return habs.concat(['bano', 'vestier']);
-    }
-    return [];
+  /**
+   * Cuántas piezas se ven ya.
+   *
+   * Cuenta RESPUESTAS PRESENTES, no `state.qi`: es lo que hace que retroceder
+   * funcione solo, sin lógica aparte. `vis` viene precalculado por plano, así
+   * que aquí no queda aritmética.
+   */
+  function celdasVisibles(answers, qList, planta) {
+    if (!planta || !planta.vis) return 0;
+    var respondidas = 0;
+    (qList || []).forEach(function (q) {
+      if (answers && answers[q.id] !== undefined) respondidas++;
+    });
+    if (respondidas <= 0) return 0;
+    var i = Math.min(respondidas, planta.vis.length) - 1;
+    return planta.vis[i] || 0;
   }
 
-  function buildRooms(ids, animar) {
-    var ROOM_GEO = window.GDF.data.ROOM_GEO;
-    var FURN = window.GDF.data.FURN;
-    var has3 = ids.indexOf('hab3') > -1;
+  /** Las piezas reveladas, en orden. */
+  function buildRooms(planta, n) {
+    if (!planta || !planta.celdas) return [];
+    return planta.celdas.slice(0, n).map(function (c) {
+      return {
+        id: c.id,
+        // `animated` sale siempre en false: cuál cae de la grúa lo decide el
+        // parcheo de DOM de main.js comparando contra lo que YA está pintado,
+        // que es la única fuente de verdad de "esto es nuevo".
+        animated: false,
+        styleText: c.styleText,
+        lienzoStyle: c.lienzoStyle,
+      };
+    });
+  }
 
-    return ids
-      .filter(function (id) {
-        return id !== 'losa';
-      })
-      .map(function (id) {
-        var g = Object.assign({}, ROOM_GEO[id]);
-        if (id === 'hab2' && has3) g.H = 25;
-
-        var roomStyle =
-          'position:absolute;left:' + g.L + '%;top:' + g.T + '%;width:' + g.W + '%;height:' + g.H + '%;' +
-          'box-sizing:border-box;background:' + g.floor + ';overflow:hidden;';
-
-        var items = (FURN[id] || []).map(function (f) {
-          var radius = typeof f[5] === 'string' ? f[5] : f[5] + 'px';
-          return {
-            styleText:
-              'left:' + f[0] + '%;top:' + f[1] + '%;width:' + f[2] + '%;height:' + f[3] + '%;' +
-              'background:' + f[4] + ';border-radius:' + radius + ';',
-          };
-        });
-
-        return {
-          id: id,
-          label: g.label,
-          animated: !!animar,
-          styleText: roomStyle,
-          items: items,
-        };
-      });
+  /**
+   * La silueta: un hueco gris por cada celda con contenido. Se pinta una vez y
+   * no se toca.
+   *
+   * Su unión ES la forma real del apartamento (una L, una T, lo que sea), sin
+   * líneas internas porque son todos del mismo gris y teselan exacto. Sirve
+   * para que las piezas caigan DENTRO de algo en vez de aparecer flotando, y
+   * para que al retroceder quede el hueco a la vista.
+   */
+  function buildHuecos(planta) {
+    if (!planta || !planta.huecos) return [];
+    return planta.huecos.map(function (c) {
+      return { id: c.id, styleText: c.styleText };
+    });
   }
 
   window.GDF = window.GDF || {};
   window.GDF.scene = {
-    revealIds: revealIds,
+    celdasVisibles: celdasVisibles,
     buildRooms: buildRooms,
+    buildHuecos: buildHuecos,
   };
 })();
