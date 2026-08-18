@@ -114,6 +114,9 @@ async def disparar_llamada(
         # E.164 obligatorio para que Dapta pueda marcar (to_number).
         "telefono": normalizar_telefono_e164(senal.telefono_movil),
         "proyecto": proyecto_interes or proyecto_top,
+        # Se sigue enviando por compatibilidad con el flow actual, pero los
+        # agentes nuevos NO ramifican por este campo: ya saben con quién
+        # hablan porque el backend los eligió por él.
         "afiliado": senal.afiliado,
         "rango_ingreso": senal.ingresos_hogar_rango,
         "zona_interes": senal.zona_interes,
@@ -132,7 +135,13 @@ async def disparar_llamada(
         "external_lead_id": external_lead_id,
     }
 
-    url = config.DAPTA_FLOW_STUDIO_WEBHOOK_URL
+    # El agente lo decide la afiliación: cada uno tiene límites distintos sobre
+    # qué puede prometer. Ver dapta/README.md.
+    url = (
+        config.DAPTA_FLOW_WEBHOOK_AFILIADO
+        if senal.afiliado is True
+        else config.DAPTA_FLOW_WEBHOOK_NO_AFILIADO
+    )
 
     # Sin URL configurada (p. ej. en tests o sin .env) -> modo mock, no llama.
     if not url:

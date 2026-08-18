@@ -26,6 +26,22 @@ DAPTA_FLOW_STUDIO_WEBHOOK_URL: str | None = os.environ.get(
     "DAPTA_FLOW_STUDIO_WEBHOOK_URL"
 )
 
+# Manuela se separó en DOS agentes especializados (ver dapta/README.md): uno para
+# afiliados y otro para no afiliados. No cambia solo el guion — cambian los
+# límites: el de no afiliados tiene PROHIBIDO citar montos de subsidio o
+# confirmar cupo. Cada agente vive detrás de su propio flow, así que hay dos
+# webhooks y el backend elige según `senal.afiliado`.
+#
+# Ambos caen de vuelta a DAPTA_FLOW_STUDIO_WEBHOOK_URL si no están definidos, para
+# que desplegar este código no dependa de tener las dos URLs listas: sin ellas el
+# comportamiento es idéntico al de antes.
+DAPTA_FLOW_WEBHOOK_AFILIADO: str | None = (
+    os.environ.get("DAPTA_FLOW_WEBHOOK_AFILIADO") or DAPTA_FLOW_STUDIO_WEBHOOK_URL
+)
+DAPTA_FLOW_WEBHOOK_NO_AFILIADO: str | None = (
+    os.environ.get("DAPTA_FLOW_WEBHOOK_NO_AFILIADO") or DAPTA_FLOW_STUDIO_WEBHOOK_URL
+)
+
 # Si es true, `POST /leads` dispara la llamada REAL de Dapta. Por defecto false
 # para no gastar créditos ni llamar números de prueba, y porque el From Number
 # de Dapta aún no está configurado. Ponlo en "true" en Render cuando esté listo.
