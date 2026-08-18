@@ -4,28 +4,6 @@
 (function () {
   'use strict';
 
-  // Contenido real del carrusel principal de colsubsidio.com/vivienda —
-  // título, descripción e imagen extraídos del __NEXT_DATA__ (JSON de Drupal)
-  // embebido en el HTML servido de esa página, no inventados. El degradado
-  // de fondo también es el real (`field_background_color` de cada slide).
-  var LANDING_SLIDES = [
-    {
-      title: 'Vivienda Colsubsidio',
-      desc: 'Construye tu futuro y el de tu familia con nuestros proyectos de vivienda VIS o VIP. Estrena, mejora o edifica tu hogar y proyecto de vida.',
-      image: 'assets/landing/hero-1.webp',
-    },
-    {
-      title: 'Tu historia comienza en la Ciudadela Maiporé',
-      desc: 'Descubre la variedad de opciones para adquirir tu propio hogar en Soacha con el respaldo de Colsubsidio.',
-      image: 'assets/landing/hero-2.webp',
-    },
-    {
-      title: 'Vivienda VIS Colsubsidio: donde nace tu hogar',
-      desc: 'Habita espacios diseñados para tus sueños en Bogotá y Cundinamarca.',
-      image: 'assets/landing/hero-3.webp',
-    },
-  ];
-
   var QUESTIONS = [
     {
       id: 'tipo',
@@ -47,10 +25,12 @@
       sub: 'Esto define a qué proyectos y subsidios puedes acceder.',
       cols: 1,
       options: [
-        { v: '≤2 SMMLV', label: 'Hasta 2 SMMLV', hint: '≈ hasta $2.8M al mes' },
-        { v: '2–4 SMMLV', label: '2 a 4 SMMLV', hint: '≈ $2.8M – $5.7M' },
-        { v: '4–8 SMMLV', label: '4 a 8 SMMLV', hint: '≈ $5.7M – $11.4M' },
-        { v: '8+ SMMLV', label: 'Más de 8 SMMLV', hint: '≈ más de $11.4M' },
+        // Las cifras salen del SMMLV que usa js/simulador.js (SUPUESTOS.smmlv,
+        // 2026): moverlo allá obliga a rehacer estas pistas.
+        { v: '≤2 SMMLV', label: 'Hasta 2 SMMLV', hint: '≈ hasta $3.5M al mes' },
+        { v: '2–4 SMMLV', label: '2 a 4 SMMLV', hint: '≈ $3.5M – $7.0M' },
+        { v: '4–8 SMMLV', label: '4 a 8 SMMLV', hint: '≈ $7.0M – $14.0M' },
+        { v: '8+ SMMLV', label: 'Más de 8 SMMLV', hint: '≈ más de $14.0M' },
       ],
     },
     {
@@ -142,8 +122,13 @@
       // respetan sus erratas a propósito — "gymnasio" con y, "cancha e padel"
       // (no "de"), "zona de lavanderia" sin tilde, "zona kid" en singular. Una
       // letra distinta y el backend deja de cruzarlas, en silencio.
-      // Esta misma lista está DUPLICADA en tools/generar_seed_backend.py
-      // (VOCABULARIO); si cambia una, cambia la otra.
+      // Esta misma lista está DUPLICADA en tools/scrape_proyectos.py
+      // (VOCABULARIO, que tools/generar_seed_backend.py reusa); si cambia una,
+      // cambia la otra. "cancha multiple" se sumó tras revisar los 31
+      // proyectos reales: "Cancha múltiple", "Cancha fútbol 5" y "Zona sport
+      // con cancha múltiple" no encajaban en ninguna de las 25 claves
+      // originales (la única cancha del vocabulario era "cancha e padel",
+      // específica de pádel).
       // El `label` sí es libre: es solo lo que ve el usuario.
       options: [
         { v: 'lobby', label: 'Lobby' },
@@ -171,39 +156,15 @@
         { v: 'cancha e padel', label: 'Cancha de pádel' },
         { v: 'taller de bicicletas', label: 'Taller de bicicletas' },
         { v: 'sauna', label: 'Sauna' },
+        { v: 'cancha multiple', label: 'Cancha múltiple' },
       ],
     },
   ];
 
-  // geometría de la planta (% dentro de la losa)
-  var ROOM_GEO = {
-    balcon: { L: 0, T: 0, W: 13, H: 100, label: 'Balcón', floor: 'repeating-linear-gradient(0deg,#8d9c76 0 5px,#849371 5px 6px)' },
-    sala: { L: 13, T: 0, W: 31, H: 50, label: 'Sala', floor: 'repeating-linear-gradient(90deg,#c99b6a 0 7px,#c19260 7px 8px)' },
-    comedor: { L: 44, T: 0, W: 22, H: 50, label: 'Comedor', floor: 'repeating-linear-gradient(90deg,#c99b6a 0 7px,#c19260 7px 8px)' },
-    hab1: { L: 66, T: 0, W: 23, H: 50, label: 'Hab. principal', floor: 'repeating-linear-gradient(90deg,#c4926d 0 7px,#bc8a63 7px 8px)' },
-    vestier: { L: 89, T: 0, W: 11, H: 50, label: 'Vestier', floor: 'repeating-linear-gradient(90deg,#bd8d5f 0 6px,#b48557 6px 7px)' },
-    cocina: { L: 13, T: 50, W: 31, H: 50, label: 'Cocina', floor: 'repeating-linear-gradient(45deg,#dcd8d1 0 8px,#d3cfc7 8px 9px)' },
-    estudio: { L: 44, T: 50, W: 22, H: 50, label: 'Estudio', floor: 'repeating-linear-gradient(90deg,#cba070 0 7px,#c39868 7px 8px)' },
-    bano: { L: 66, T: 50, W: 16, H: 50, label: 'Baño', floor: 'repeating-linear-gradient(0deg,#cfd8dc 0 7px,#c6d0d5 7px 8px)' },
-    hab2: { L: 82, T: 50, W: 18, H: 50, label: 'Hab. 2', floor: 'repeating-linear-gradient(90deg,#c4926d 0 7px,#bc8a63 7px 8px)' },
-    hab3: { L: 82, T: 75, W: 18, H: 25, label: 'Hab. 3', floor: 'repeating-linear-gradient(90deg,#c4926d 0 7px,#bc8a63 7px 8px)' },
-    hall: { L: 44, T: 50, W: 22, H: 50, label: 'Hall', floor: 'repeating-linear-gradient(90deg,#cfc3b2 0 7px,#c8bcaa 7px 8px)' },
-    deposito: { L: 82, T: 50, W: 18, H: 50, label: 'Depósito', floor: 'repeating-linear-gradient(45deg,#d3cfc7 0 8px,#cbc7bf 8px 9px)' },
-  };
-
-  // [left, top, width, height, color, radius] en % del cuarto
-  var FURN = {
-    sala: [[8, 10, 60, 20, '#a8a5a0', 3], [14, 40, 62, 44, '#b6c1a6', 2], [36, 54, 24, 16, '#8b6a46', 3], [88, 32, 8, 34, '#3a3733', 1]],
-    comedor: [[22, 28, 56, 40, '#a97e52', '50%'], [10, 34, 8, 14, '#8a8580', 2], [82, 34, 8, 14, '#8a8580', 2], [36, 12, 22, 8, '#8a8580', 2], [36, 80, 22, 8, '#8a8580', 2]],
-    cocina: [[4, 74, 92, 16, '#d5d8da', 2], [22, 36, 54, 18, '#e6e0d5', 2], [10, 76, 18, 12, '#4a4744', 2], [80, 12, 16, 24, '#cfd3d6', 2]],
-    hab1: [[24, 16, 52, 62, '#f4f1eb', 3], [29, 20, 42, 12, '#ddd7cc', 2], [4, 18, 14, 16, '#8b6a46', 2]],
-    hab2: [[18, 20, 58, 54, '#f4f1eb', 3], [24, 24, 46, 12, '#ddd7cc', 2]],
-    hab3: [[18, 18, 58, 50, '#f4f1eb', 3], [24, 22, 46, 12, '#ddd7cc', 2]],
-    bano: [[6, 8, 38, 36, '#dbe4e8', 2], [56, 14, 30, 20, '#fdfdfc', 3], [56, 58, 30, 16, '#f0f2f3', 2]],
-    balcon: [[20, 8, 58, 13, '#6f8f5f', '50%'], [18, 40, 60, 13, '#6f8f5f', '50%'], [22, 72, 54, 13, '#6f8f5f', '50%']],
-    estudio: [[10, 20, 74, 18, '#a97e52', 2], [40, 46, 20, 16, '#8a8580', '50%'], [10, 78, 74, 10, '#b09070', 2]],
-    vestier: [[14, 12, 72, 6, '#8a8580', 2], [18, 22, 64, 26, '#c9c4bc', 2], [14, 62, 72, 10, '#b09070', 2]],
-  };
+  // NOTA: aquí vivían ROOM_GEO (geometría fija de la planta) y FURN (muebles).
+  // Se fueron cuando el quiz pasó a armar el PLANO REAL de un apartamento del
+  // catálogo: ya no se dibujan cuartos ni muebles, se recortan piezas de la
+  // imagen que publica la ficha. Ver js/planta.js y js/planos.js.
 
   // Vocabulario fijo de amenidades/zonas comunales — icono (SVG inline,
   // 24x24, stroke=currentColor) + etiqueta por categoría. `PROJECTS[].amenities`
@@ -246,32 +207,32 @@
   // OFICIALES de cada ficha, no estimados) — ver PROJECTS al final del archivo.
   // Esta copia solo entra si proyectos.js no cargó.
   var PROJECTS_RESPALDO = [
-    { name: 'Agrupación De Vivienda Monguí', muni: 'Soacha', vis: true, price: 181, area: 47, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏢', grad: 'linear-gradient(135deg,#0067b1,#4a94cc)', image: 'assets/proyectos/agrupacion-de-vivienda-mongui.webp', amenities: ['porteria', 'salon', 'infantil', 'biosaludable', 'recreativa', 'parqueadero'] },
-    { name: 'Agrupación De Vivienda La Macarena', muni: 'Soacha', vis: true, price: 151, area: 33, hab: 1, subsidy: 'Mi Casa Ya', emoji: '🏘️', grad: 'linear-gradient(135deg,#3a7bb0,#7ec0ec)', image: 'assets/proyectos/agrupacion-de-vivienda-la-macarena.webp', amenities: ['porteria', 'cancha', 'recreativa', 'biosaludable', 'infantil', 'parqueadero', 'gimnasio', 'salon'] },
-    { name: 'Verde Esperanza El Dorado', muni: 'Ubaté', vis: true, price: 169, area: 50, hab: 3, subsidy: 'Mi Casa Ya', emoji: '🏡', grad: 'linear-gradient(135deg,#004c85,#0067b1)', image: 'assets/proyectos/verde-esperanza-el-dorado.webp', amenities: ['recreativa', 'salon', 'biosaludable', 'infantil', 'porteria', 'parqueadero'] },
-    { name: 'La Arboleda', muni: 'Bogotá', zona: 'Sur', vis: true, price: 197, area: 48, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏙️', grad: 'linear-gradient(135deg,#2f6a9c,#5aa0d0)', image: 'assets/proyectos/la-arboleda.png', amenities: ['porteria', 'salon', 'infantil', 'gimnasio', 'recreativa'] },
-    { name: 'INARI', muni: 'Chía', vis: true, price: 269, area: 43, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏢', grad: 'linear-gradient(135deg,#575756,#8a8a89)', image: 'assets/proyectos/inari.webp', amenities: ['porteria', 'gimnasio', 'biosaludable', 'infantil', 'salon'] },
-    { name: 'Agrupación De Vivienda Pamplona I', muni: 'Soacha', vis: true, price: 218, area: 48, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏘️', grad: 'linear-gradient(135deg,#0067b1,#7ec0ec)', image: 'assets/proyectos/agrupacion-de-vivienda-pamplona-i.webp', amenities: ['porteria', 'gimnasio', 'cancha', 'infantil', 'recreativa', 'biosaludable'] },
+    { name: 'Agrupación De Vivienda Monguí', muni: 'Soacha', vis: true, price: 181, area: 47, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏢', grad: 'linear-gradient(135deg,#0067b1,#4a94cc)', image: 'assets/proyectos/agrupacion-de-vivienda-mongui.webp', amenities: ['porteria', 'salon', 'infantil', 'biosaludable', 'recreativa', 'parqueadero'] },
+    { name: 'Agrupación De Vivienda La Macarena', muni: 'Soacha', vis: true, price: 151, area: 33, hab: 1, subsidy: 'Subsidio VIS', emoji: '🏘️', grad: 'linear-gradient(135deg,#3a7bb0,#7ec0ec)', image: 'assets/proyectos/agrupacion-de-vivienda-la-macarena.webp', amenities: ['porteria', 'cancha', 'recreativa', 'biosaludable', 'infantil', 'parqueadero', 'gimnasio', 'salon'] },
+    { name: 'Verde Esperanza El Dorado', muni: 'Ubaté', vis: true, price: 169, area: 50, hab: 3, subsidy: 'Subsidio VIS', emoji: '🏡', grad: 'linear-gradient(135deg,#004c85,#0067b1)', image: 'assets/proyectos/verde-esperanza-el-dorado.webp', amenities: ['recreativa', 'salon', 'biosaludable', 'infantil', 'porteria', 'parqueadero'] },
+    { name: 'La Arboleda', muni: 'Bogotá', zona: 'Sur', vis: true, price: 197, area: 48, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏙️', grad: 'linear-gradient(135deg,#2f6a9c,#5aa0d0)', image: 'assets/proyectos/la-arboleda.png', amenities: ['porteria', 'salon', 'infantil', 'gimnasio', 'recreativa'] },
+    { name: 'INARI', muni: 'Chía', vis: true, price: 269, area: 43, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏢', grad: 'linear-gradient(135deg,#575756,#8a8a89)', image: 'assets/proyectos/inari.webp', amenities: ['porteria', 'gimnasio', 'biosaludable', 'infantil', 'salon'] },
+    { name: 'Agrupación De Vivienda Pamplona I', muni: 'Soacha', vis: true, price: 218, area: 48, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏘️', grad: 'linear-gradient(135deg,#0067b1,#7ec0ec)', image: 'assets/proyectos/agrupacion-de-vivienda-pamplona-i.webp', amenities: ['porteria', 'gimnasio', 'cancha', 'infantil', 'recreativa', 'biosaludable'] },
     { name: 'Los Nogales', muni: 'Bogotá', zona: 'Occidente', vis: false, price: 604, area: 85, hab: 3, subsidy: 'Crédito hipotecario', emoji: '🏡', grad: 'linear-gradient(135deg,#33322f,#5f5e5b)', image: 'assets/proyectos/los-nogales.webp', amenities: ['recreativa', 'salon', 'gimnasio', 'parqueadero', 'cancha', 'infantil'] },
-    { name: 'Agrupación De Vivienda Bosque De Arrayán', muni: 'Tocancipá', vis: true, price: 200, area: 52, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏙️', grad: 'linear-gradient(135deg,#4a94cc,#0067b1)', image: 'assets/proyectos/agrupacion-de-vivienda-bosque-de-arrayan.webp', amenities: ['porteria', 'infantil', 'cancha', 'recreativa', 'salon', 'biosaludable', 'gimnasio', 'parqueadero'] },
-    { name: 'Agrupación De Vivienda Bosque De Turpial', muni: 'Tocancipá', vis: true, price: 236, area: 58, hab: 3, subsidy: 'Mi Casa Ya', emoji: '🏢', grad: 'linear-gradient(135deg,#575756,#33322f)', image: 'assets/proyectos/agrupacion-de-vivienda-bosque-de-turpial.webp', amenities: ['porteria', 'salon', 'infantil', 'recreativa', 'gimnasio', 'cancha', 'biosaludable', 'parqueadero'] },
-    { name: 'Versalles', muni: 'Soacha', vis: true, price: 211, area: 40, hab: 1, subsidy: 'Mi Casa Ya', emoji: '🏘️', grad: 'linear-gradient(135deg,#0067b1,#4a94cc)', image: 'assets/proyectos/versalles.webp', amenities: ['porteria', 'salon', 'cancha', 'infantil', 'recreativa', 'biosaludable'] },
-    { name: 'Villa Mercedes El Dorado', muni: 'La Mesa', vis: true, price: 172, area: 48, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏡', grad: 'linear-gradient(135deg,#3a7bb0,#7ec0ec)', image: 'assets/proyectos/villa-mercedes-el-dorado.jpg' },
-    { name: 'Agrupación De Vivienda Payandé', muni: 'Ricaurte', vis: true, price: 177, area: 48, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏙️', grad: 'linear-gradient(135deg,#004c85,#0067b1)', image: 'assets/proyectos/agrupacion-de-vivienda-payande.webp', amenities: ['salon', 'recreativa', 'parqueadero'] },
-    { name: 'Agrupación De Vivienda Reserva De Guayacán', muni: 'Girardot', vis: true, price: 229, area: 50, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏢', grad: 'linear-gradient(135deg,#2f6a9c,#5aa0d0)', image: 'assets/proyectos/agrupacion-de-vivienda-reserva-de-guayacan.webp', amenities: ['salon', 'piscina', 'recreativa', 'infantil', 'parqueadero'] },
-    { name: 'Agrupación De Vivienda Samán', muni: 'Ricaurte', vis: true, price: 254, area: 48, hab: 3, subsidy: 'Mi Casa Ya', emoji: '🏘️', grad: 'linear-gradient(135deg,#575756,#8a8a89)', image: 'assets/proyectos/agrupacion-de-vivienda-saman.webp', amenities: ['porteria', 'salon', 'piscina', 'infantil', 'recreativa', 'gimnasio', 'parqueadero'] },
-    { name: 'Proyecto Karakalí', muni: 'Bogotá', zona: 'Norte', vis: true, price: 241, area: 28, hab: 1, subsidy: 'Mi Casa Ya', emoji: '🏙️', grad: 'linear-gradient(135deg,#0067b1,#7ec0ec)', image: 'assets/proyectos/proyecto-karakali.webp', amenities: ['gimnasio', 'recreativa', 'porteria', 'biosaludable', 'salon'] },
+    { name: 'Agrupación De Vivienda Bosque De Arrayán', muni: 'Tocancipá', vis: true, price: 200, area: 52, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏙️', grad: 'linear-gradient(135deg,#4a94cc,#0067b1)', image: 'assets/proyectos/agrupacion-de-vivienda-bosque-de-arrayan.webp', amenities: ['porteria', 'infantil', 'cancha', 'recreativa', 'salon', 'biosaludable', 'gimnasio', 'parqueadero'] },
+    { name: 'Agrupación De Vivienda Bosque De Turpial', muni: 'Tocancipá', vis: true, price: 236, area: 58, hab: 3, subsidy: 'Subsidio VIS', emoji: '🏢', grad: 'linear-gradient(135deg,#575756,#33322f)', image: 'assets/proyectos/agrupacion-de-vivienda-bosque-de-turpial.webp', amenities: ['porteria', 'salon', 'infantil', 'recreativa', 'gimnasio', 'cancha', 'biosaludable', 'parqueadero'] },
+    { name: 'Versalles', muni: 'Soacha', vis: true, price: 211, area: 40, hab: 1, subsidy: 'Subsidio VIS', emoji: '🏘️', grad: 'linear-gradient(135deg,#0067b1,#4a94cc)', image: 'assets/proyectos/versalles.webp', amenities: ['porteria', 'salon', 'cancha', 'infantil', 'recreativa', 'biosaludable'] },
+    { name: 'Villa Mercedes El Dorado', muni: 'La Mesa', vis: true, price: 172, area: 48, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏡', grad: 'linear-gradient(135deg,#3a7bb0,#7ec0ec)', image: 'assets/proyectos/villa-mercedes-el-dorado.jpg' },
+    { name: 'Agrupación De Vivienda Payandé', muni: 'Ricaurte', vis: true, price: 177, area: 48, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏙️', grad: 'linear-gradient(135deg,#004c85,#0067b1)', image: 'assets/proyectos/agrupacion-de-vivienda-payande.webp', amenities: ['salon', 'recreativa', 'parqueadero'] },
+    { name: 'Agrupación De Vivienda Reserva De Guayacán', muni: 'Girardot', vis: true, price: 229, area: 50, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏢', grad: 'linear-gradient(135deg,#2f6a9c,#5aa0d0)', image: 'assets/proyectos/agrupacion-de-vivienda-reserva-de-guayacan.webp', amenities: ['salon', 'piscina', 'recreativa', 'infantil', 'parqueadero'] },
+    { name: 'Agrupación De Vivienda Samán', muni: 'Ricaurte', vis: true, price: 254, area: 48, hab: 3, subsidy: 'Subsidio VIS', emoji: '🏘️', grad: 'linear-gradient(135deg,#575756,#8a8a89)', image: 'assets/proyectos/agrupacion-de-vivienda-saman.webp', amenities: ['porteria', 'salon', 'piscina', 'infantil', 'recreativa', 'gimnasio', 'parqueadero'] },
+    { name: 'Proyecto Karakalí', muni: 'Bogotá', zona: 'Norte', vis: true, price: 241, area: 28, hab: 1, subsidy: 'Subsidio VIS', emoji: '🏙️', grad: 'linear-gradient(135deg,#0067b1,#7ec0ec)', image: 'assets/proyectos/proyecto-karakali.webp', amenities: ['gimnasio', 'recreativa', 'porteria', 'biosaludable', 'salon'] },
     { name: 'ARAUCARIA', muni: 'Bogotá', zona: 'Occidente', vis: false, price: 650, area: 90, hab: 3, subsidy: 'Crédito hipotecario', emoji: '🏡', grad: 'linear-gradient(135deg,#33322f,#5f5e5b)', image: 'assets/proyectos/araucaria.webp', amenities: ['porteria', 'salon', 'gimnasio', 'recreativa', 'infantil', 'cancha'] },
-    { name: 'Villa Fiorita', muni: 'Bogotá', zona: 'Occidente', vis: true, price: 208, area: 48, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏢', grad: 'linear-gradient(135deg,#4a94cc,#0067b1)' },
-    { name: 'Agrupación De Vivienda Fuentevida', muni: 'Tocancipá', vis: true, price: 122, area: 45, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏘️', grad: 'linear-gradient(135deg,#575756,#33322f)' },
-    { name: 'Conjunto Residencial Campo Alegre El Dorado', muni: 'Ricaurte', vis: true, price: 114, area: 49, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏙️', grad: 'linear-gradient(135deg,#0067b1,#4a94cc)' },
-    { name: 'Conjunto Residencial Vibo Once', muni: 'Bogotá', zona: 'Centro', vis: true, price: 283, area: 48, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏢', grad: 'linear-gradient(135deg,#3a7bb0,#7ec0ec)', image: 'assets/proyectos/conjunto-residencial-vibo-once.webp', amenities: ['porteria', 'salon', 'gimnasio', 'recreativa', 'infantil'] },
+    { name: 'Villa Fiorita', muni: 'Bogotá', zona: 'Occidente', vis: true, price: 208, area: 48, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏢', grad: 'linear-gradient(135deg,#4a94cc,#0067b1)' },
+    { name: 'Agrupación De Vivienda Fuentevida', muni: 'Tocancipá', vis: true, price: 122, area: 45, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏘️', grad: 'linear-gradient(135deg,#575756,#33322f)' },
+    { name: 'Conjunto Residencial Campo Alegre El Dorado', muni: 'Ricaurte', vis: true, price: 114, area: 49, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏙️', grad: 'linear-gradient(135deg,#0067b1,#4a94cc)' },
+    { name: 'Conjunto Residencial Vibo Once', muni: 'Bogotá', zona: 'Centro', vis: true, price: 283, area: 48, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏢', grad: 'linear-gradient(135deg,#3a7bb0,#7ec0ec)', image: 'assets/proyectos/conjunto-residencial-vibo-once.webp', amenities: ['porteria', 'salon', 'gimnasio', 'recreativa', 'infantil'] },
     { name: 'Abeto', muni: 'Bogotá', zona: 'Occidente', vis: false, price: 372, area: 55, hab: 2, subsidy: 'Crédito hipotecario', emoji: '🏡', grad: 'linear-gradient(135deg,#004c85,#0067b1)', amenities: ['porteria', 'salon', 'gimnasio', 'recreativa'] },
-    { name: 'Reserva Del Nogal', muni: 'Bogotá', zona: 'Sur', vis: true, price: 168, area: 48, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏘️', grad: 'linear-gradient(135deg,#2f6a9c,#5aa0d0)', image: 'assets/proyectos/reserva-del-nogal.webp', amenities: ['salon', 'porteria', 'parqueadero'] },
-    { name: 'Mirador Del Virrey II', muni: 'Bogotá', zona: 'Sur', vis: true, price: 170, area: 48, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏙️', grad: 'linear-gradient(135deg,#575756,#8a8a89)', image: 'assets/proyectos/mirador-del-virrey-ii.webp', amenities: ['salon', 'parqueadero'] },
-    { name: 'Zarzal', muni: 'Soacha', vis: true, price: 225, area: 45, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏢', grad: 'linear-gradient(135deg,#0067b1,#7ec0ec)', image: 'assets/proyectos/zarzal.webp', amenities: ['porteria', 'salon', 'infantil', 'gimnasio', 'parqueadero', 'recreativa'] },
-    { name: 'Agrupación De Vivienda Jardín', muni: 'Soacha', vis: true, price: 153, area: 47, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏘️', grad: 'linear-gradient(135deg,#33322f,#5f5e5b)' },
-    { name: 'Agrupación Mompós-Ciudadela Colsubsidio Maiporé', muni: 'Soacha', vis: true, price: 150, area: 47, hab: 2, subsidy: 'Mi Casa Ya', emoji: '🏡', grad: 'linear-gradient(135deg,#4a94cc,#0067b1)' },
+    { name: 'Reserva Del Nogal', muni: 'Bogotá', zona: 'Sur', vis: true, price: 168, area: 48, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏘️', grad: 'linear-gradient(135deg,#2f6a9c,#5aa0d0)', image: 'assets/proyectos/reserva-del-nogal.webp', amenities: ['salon', 'porteria', 'parqueadero'] },
+    { name: 'Mirador Del Virrey II', muni: 'Bogotá', zona: 'Sur', vis: true, price: 170, area: 48, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏙️', grad: 'linear-gradient(135deg,#575756,#8a8a89)', image: 'assets/proyectos/mirador-del-virrey-ii.webp', amenities: ['salon', 'parqueadero'] },
+    { name: 'Zarzal', muni: 'Soacha', vis: true, price: 225, area: 45, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏢', grad: 'linear-gradient(135deg,#0067b1,#7ec0ec)', image: 'assets/proyectos/zarzal.webp', amenities: ['porteria', 'salon', 'infantil', 'gimnasio', 'parqueadero', 'recreativa'] },
+    { name: 'Agrupación De Vivienda Jardín', muni: 'Soacha', vis: true, price: 153, area: 47, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏘️', grad: 'linear-gradient(135deg,#33322f,#5f5e5b)' },
+    { name: 'Agrupación Mompós-Ciudadela Colsubsidio Maiporé', muni: 'Soacha', vis: true, price: 150, area: 47, hab: 2, subsidy: 'Subsidio VIS', emoji: '🏡', grad: 'linear-gradient(135deg,#4a94cc,#0067b1)' },
   ];
 
   // (La tabla de cercanía entre MUNICIPIOS se eliminó: la demo es solo de
@@ -337,10 +298,7 @@
 
   window.GDF = window.GDF || {};
   window.GDF.data = {
-    LANDING_SLIDES: LANDING_SLIDES,
     QUESTIONS: QUESTIONS,
-    ROOM_GEO: ROOM_GEO,
-    FURN: FURN,
     PROJECTS: PROJECTS,
     AMENITIES: AMENITIES,
     VECINAS: VECINAS,

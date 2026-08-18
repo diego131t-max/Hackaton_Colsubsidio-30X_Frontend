@@ -69,3 +69,8 @@ Thumbs.db
 # cambió entre una versión y la siguiente.
 !dapta/build/
 !dapta/build/*.txt
+
+# Volcado de estilos computados de la pagina real de Colsubsidio
+# (frontend/tools/clonar_portada.py --medir). Es insumo para escribir el CSS
+# a mano, no lo consume la app.
+frontend/tools/.estilos_portada.json

@@ -10,7 +10,12 @@
       // 'confirmacion' es el cierre. Se conserva el nombre 'result' para no
       // renombrar acciones/CSS que ya funcionan.
       screen: 'landing',
-      landingSlide: 0, // índice del carrusel de landing()
+      // La portada clona la página real de Colsubsidio, que tiene CUATRO
+      // carruseles independientes; cada clave guarda su página actual. El
+      // número de páginas lo decide templates.js (PORTADA_CARRUSELES), que es
+      // quien sabe cuántas tarjetas entran a la vez.
+      portadaSlides: { propios: 0, ciudades: 0, aliados: 0, opciones: 0 },
+      portadaFooterTab: 0, // pestaña abierta del footer (Acerca de nosotros)
       // Sin pantalla de elegir personaje: 'x' (avatar neutro) por defecto.
       gender: 'x', // 'f' | 'm' | 'x'
       nombre: '',
@@ -51,9 +56,28 @@
       // Todos van indexados por NOMBRE de proyecto (no por posición, que
       // cambia si el clustering reordena la lista).
       detalleAbierto: {}, // nombre -> bool
-      simAbierto: {}, // nombre -> bool (el simulador dentro del desplegable)
       tipologiaActiva: {}, // nombre -> índice de la pestaña
-      simConfig: {}, // nombre -> { inicial: %, plazo: años }
+      // nombre -> { inicial: %, plazo: años, modalidad: 'uvr'|'pesos',
+      //             categoria: 'A'|'B'|'C', complementario: bool, ingreso: pesos }
+      // Se conserva por proyecto para que volver a abrir el simulador de una
+      // tarjeta que ya se tocó no pierda lo que el usuario había ajustado.
+      simConfig: {},
+
+      // Simulador de pagos: overlay de dos pasos (1 = elegir producto,
+      // 2 = el simulador completo). Ver simuladorOverlay en templates.js.
+      // Uno solo a la vez en toda la app —no hace falta un mapa por proyecto
+      // como los de arriba— porque solo se puede simular un proyecto a la vez.
+      simulador: null, // null | { proyecto: nombre, tipologia: idx, paso: 1|2 }
+
+      // El apartamento REAL que arma el quiz: qué plano oficial se está
+      // montando y la geometría de sus piezas. Lo elige js/planta.js al
+      // empezar (elegirApartamento) y NO cambia durante la partida: es un
+      // ejemplo para enseñar cómo se construye una vivienda, no la
+      // recomendación —esa la calcula matching.js al final.
+      //
+      // No es un valor derivado a propósito: el parcheo de DOM de main.js
+      // necesita comparar lo que hay pintado contra lo que toca ahora.
+      planta: null, // null | ver elegirApartamento() en js/planta.js
     };
   }
 
@@ -79,25 +103,18 @@
     // piso_preferido, entorno_deseado), así que el total es la lista misma.
     var stepTotal = qList.length;
 
-    var revealedIds = [];
-    answeredQs.forEach(function (x) {
-      scene.revealIds(x.id, state.answers).forEach(function (id) {
-        revealedIds.push(id);
-      });
-    });
-    if (state.screen === 'result') {
-      if (revealedIds.indexOf('estudio') === -1) revealedIds.push('hall');
-      if (revealedIds.indexOf('hab2') === -1) revealedIds.push('deposito');
-    }
-
     var nHab = state.answers.habitaciones === '3+' ? 3 : parseInt(state.answers.habitaciones || '2', 10);
     var nPers = state.answers.personas === '4+' ? 4 : parseInt(state.answers.personas || '0', 10);
     var compat = Math.min(97, Math.round(42 + (answered / stepTotal) * 55));
 
-    var showLote = revealedIds.indexOf('losa') === -1;
-    var losaRevealed = revealedIds.indexOf('losa') > -1;
-    var rooms = scene.buildRooms(revealedIds, true);
-    var tipoBadge = 'Tipo ' + nHab + 'A · ' + (38 + nHab * 13 + nPers * 2) + ' m²';
+    // El plano REAL que se está armando (ver js/planta.js); aquí solo se
+    // decide cuántas de sus piezas se ven ya. La silueta y la losa existen
+    // desde antes de la primera respuesta.
+    var planta = state.planta;
+    var showLote = !planta;
+    var losaRevealed = !!planta;
+    var rooms = scene.buildRooms(planta, scene.celdasVisibles(state.answers, qList, planta));
+    var huecos = scene.buildHuecos(planta);
 
     var a = state.answers;
     var perfilChips = [];
@@ -112,16 +129,54 @@
       q: q,
       answered: answered,
       stepTotal: stepTotal,
-      revealedIds: revealedIds,
       showLote: showLote,
       losaRevealed: losaRevealed,
       rooms: rooms,
+      huecos: huecos,
+      // El apartamento que se está armando: de aquí salen el rótulo y la
+      // relación de aspecto de la losa.
+      planta: planta,
       nHab: nHab,
       nPers: nPers,
       compat: compat,
-      tipoBadge: tipoBadge,
       perfilChips: perfilChips,
     };
+  }
+
+  /**
+   * Cambia el plano por uno con las alcobas que el usuario acaba de pedir, si
+   * el que estaba puesto no las tiene.
+   *
+   * `ajustada` queda en true SIEMPRE que se conteste esta pregunta, cambie el
+   * plano o no, y main.js lo lee para animar el ajuste. Es a propósito: el
+   * plano provisional a veces ya tenía las alcobas pedidas —con 25 planos en
+   * el sorteo pasa aproximadamente 1 de cada 8 veces— y entonces contestar no
+   * producía ninguna reacción visible, así que la misma acción unas veces
+   * movía el plano y otras no. Lo que la animación comunica es "tu plano
+   * quedó ajustado a lo que pediste", y eso es cierto en los dos casos.
+   *
+   * La pregunta de alcobas va de sexta (ver js/data.js), así que para cuando
+   * se contesta suele haber varias piezas ya pintadas del apartamento
+   * provisional. `reacomodarPlano` (main.js) las desplaza a su sitio en el
+   * plano nuevo y cruza a la imagen nueva, en vez de destruirlas y volver a
+   * empezar.
+   */
+  function ajustarPlantaAHabitaciones(state) {
+    var pedidas = window.GDF.matching.habitacionesPedidas(state.answers);
+    var actual = state.planta;
+    if (actual && actual.habitaciones === pedidas) {
+      actual.ajustada = true;
+      return;
+    }
+    var nueva = window.GDF.planta.elegirApartamento(state, pedidas);
+    // Si no hubo con qué reemplazarlo, se queda el que estaba: mejor un plano
+    // que no cuadra que una escena vacía a mitad del quiz.
+    if (!nueva) {
+      if (actual) actual.ajustada = true;
+      return;
+    }
+    nueva.ajustada = true;
+    state.planta = nueva;
   }
 
   function applyAction(state, action, ds) {
@@ -138,15 +193,28 @@
         state.screen = 'escarapela';
         break;
 
-      case 'setLandingSlide':
-        state.landingSlide = parseInt(ds.value, 10) || 0;
+      // --- carruseles de la portada ---
+      // El número de páginas no vive aquí sino en templates.js, que es quien
+      // sabe cuántas tarjetas caben por página: `paginasPortada` se lo
+      // pregunta. Sin eso, "siguiente" en la última página no volvería al
+      // principio y el carrusel se quedaría clavado.
+      case 'setPortadaSlide':
+        state.portadaSlides[ds.carrusel] = parseInt(ds.value, 10) || 0;
         break;
 
-      case 'nextLandingSlide': {
-        var n = window.GDF.data.LANDING_SLIDES.length;
-        state.landingSlide = (state.landingSlide + 1) % n;
+      case 'nextPortadaSlide':
+      case 'prevPortadaSlide': {
+        var clave = ds.carrusel;
+        var total = window.GDF.templates.paginasPortada(clave);
+        var paso = action === 'nextPortadaSlide' ? 1 : -1;
+        state.portadaSlides[clave] =
+          ((state.portadaSlides[clave] || 0) + paso + total) % total;
         break;
       }
+
+      case 'setPortadaFooterTab':
+        state.portadaFooterTab = parseInt(ds.value, 10) || 0;
+        break;
 
       case 'setAfiliado':
         state.afiliado = ds.value;
@@ -170,6 +238,11 @@
         state.answers = { afiliado: state.afiliado };
         state.qi = 0;
         state.screen = 'quiz';
+        // El apartamento se elige AQUÍ y ya no cambia. Sale del nombre y el
+        // apellido que se acaban de escribir, así que la misma persona ve
+        // siempre el mismo plano y dos personas seguidas en un stand ven
+        // planos distintos.
+        state.planta = window.GDF.planta.elegirApartamento(state);
         break;
       }
 
@@ -202,6 +275,16 @@
         } else {
           state.qi = ni;
         }
+        // El apartamento se fija al empezar, con UNA excepción: al contestar
+        // cuántas alcobas quiere, el plano pasa a ser uno que de verdad las
+        // tenga. Enseñar un apartaestudio a quien acaba de pedir tres alcobas
+        // es la incoherencia más visible que puede tener la escena.
+        //
+        // El cambio es barato de ver porque todas las plantas del sorteo son
+        // rectangulares y se trocean igual (12 celdas, c0..c11): las piezas ya
+        // puestas no mueren, se reacomodan y cambian de imagen.
+        if (qid === 'habitaciones') ajustarPlantaAHabitaciones(state);
+        else if (state.planta) state.planta.ajustada = false;
         break;
       }
 
@@ -245,6 +328,10 @@
         delete nextAnswers2[prev.id];
         state.qi = state.qi - 1;
         state.answers = nextAnswers2;
+        // El apartamento NO se pierde al retroceder, ni siquiera hasta la
+        // primera pregunta: se queda sin piezas y en pantalla sigue la silueta.
+        // Eso es lo que evita tener que reconstruir la escena por innerHTML.
+        if (state.planta) state.planta.ajustada = false;
         break;
       }
 
@@ -268,8 +355,66 @@
 
       case 'simSet': {
         var cfg = state.simConfig[ds.proyecto] || {};
-        cfg[ds.campo] = parseInt(ds.valor, 10);
+        // 'modalidad' y 'categoria' son strings; 'complementario' es un
+        // interruptor; el resto (inicial, plazo, ingreso) son numéricos.
+        if (ds.campo === 'modalidad' || ds.campo === 'categoria') {
+          cfg[ds.campo] = ds.valor;
+        } else if (ds.campo === 'complementario') {
+          cfg.complementario = ds.valor === '1';
+        } else {
+          cfg[ds.campo] = parseInt(ds.valor, 10) || 0;
+        }
         state.simConfig[ds.proyecto] = cfg;
+        break;
+      }
+
+      // Acciones del overlay del simulador. Van por el dispatch/render normal,
+      // a diferencia de 'simSet': abrir, avanzar de paso o cerrar son acciones
+      // discretas, no inputs continuos, así que no hace falta el atajo de
+      // parcheo de DOM — y un re-render completo es seguro acá porque ya
+      // restaura detalleAbierto/tipologiaActiva/simConfig solo.
+      case 'abrirSimulador': {
+        var idx = parseInt(ds.tipologia, 10) || 0;
+        state.simulador = { proyecto: ds.proyecto, tipologia: idx, paso: 1 };
+        // Sembrar los valores por defecto que dependen de las respuestas del
+        // quiz. Solo la primera vez: si el usuario ya movió los controles de
+        // este proyecto, se respeta lo que dejó.
+        if (!state.simConfig[ds.proyecto]) {
+          var sim = window.GDF.simulador;
+          var cat = sim.categoriaSugerida(state.answers.ingresos);
+          state.simConfig[ds.proyecto] = {
+            inicial: sim.SUPUESTOS.cuotaInicialDefault,
+            plazo: sim.SUPUESTOS.plazoDefault,
+            // Se arranca en UVR solo si la tasa de esa categoría está
+            // publicada (A y B). Para la C, cuya tasa en UVR es todavía un
+            // placeholder, se abre en pesos: es la que sí está verificada.
+            modalidad: cat && !sim.tasaUvrPorConfirmar(cat) ? 'uvr' : 'pesos',
+            categoria: cat || 'B',
+            complementario: false,
+            ingreso: Math.round(sim.ingresoMedioDe(state.answers.ingresos)),
+          };
+        }
+        break;
+      }
+
+      case 'simPaso':
+        if (!state.simulador) return false;
+        state.simulador.paso = parseInt(ds.valor, 10) || 1;
+        break;
+
+      case 'cerrarSimulador':
+        state.simulador = null;
+        break;
+
+      // Elegir producto en el paso 1 NO cierra el overlay: avanza al paso 2,
+      // que es el simulador completo. El hipotecario es la base siempre; el
+      // complementario se enciende sobre él (ver `simular` en simulador.js).
+      case 'elegirProducto': {
+        if (!state.simulador) return false;
+        var cfgProd = state.simConfig[state.simulador.proyecto] || {};
+        cfgProd.complementario = ds.valor === 'complementario';
+        state.simConfig[state.simulador.proyecto] = cfgProd;
+        state.simulador.paso = 2;
         break;
       }
 

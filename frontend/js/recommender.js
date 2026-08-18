@@ -96,7 +96,7 @@
       vis: !!p.vis,
       subsidio: !!p.vis,
       // Zonas comunes reales de la ficha: { label, icon, clave }. `clave` es
-      // la del vocabulario de 25 del contrato y es lo que permite resaltar las
+      // la del vocabulario de 26 del contrato y es lo que permite resaltar las
       // que el usuario pidió en la pregunta de entorno.
       amenidades: p.amenidades || [],
       score: p.score != null ? p.score : null,
@@ -325,7 +325,16 @@
   //   'backend'           -> tarjetas del backend (cuando adopten nuestro seed)
   //   'local'             -> solo motor local, sin red
   function recomendar(state, cb) {
-    var fuente = (window.GDF_CONFIG || {}).RECOMMENDER || 'hibrido';
+    var cfg = window.GDF_CONFIG || {};
+    // Demo sin red (ver SIN_BACKEND en js/config.js): mismas tarjetas que
+    // 'hibrido' —el motor local ya las calcula— pero sin pedir el lead_id, que
+    // es lo único para lo que 'hibrido' toca la red. `aproximado: false` porque
+    // los proyectos son igual de reales que en la demo conectada.
+    if (cfg.SIN_BACKEND) {
+      recomendarLocal(state.answers, cb, { aproximado: false });
+      return;
+    }
+    var fuente = cfg.RECOMMENDER || 'hibrido';
     if (fuente === 'local') {
       recomendarLocal(state.answers, cb, { aproximado: true });
       return;

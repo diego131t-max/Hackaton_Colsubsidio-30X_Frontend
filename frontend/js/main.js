@@ -4,7 +4,7 @@
 
   var state = window.GDF.state.createInitial();
   var root = null;
-  var landingTimer = null;
+
   // Pantalla mostrada en el último render, para distinguir "entré a una
   // pantalla nueva" de "seguimos en la misma pantalla pero cambió algo"
   // (afiliado, consent, proyecto elegido, pregunta del quiz...). Cada
@@ -14,6 +14,17 @@
   // botón. Las animaciones internas (cuartos cayendo, progreso, chips) no
   // dependen de esto y siguen disparándose siempre, como debe ser.
   var lastScreen = null;
+
+  // Selección en curso de la pregunta 'entorno_deseado' (buscador con chips).
+  // Vive fuera de `state` a propósito, igual que los inputs no controlados:
+  // cada tecla en el buscador o cada clic en una opción actualizaría
+  // `state.answers` y forzaría un re-render completo de la pantalla, que
+  // perdería el foco del buscador. Se compromete a `state` recién al pulsar
+  // "Continuar" (ver 'answerQuizMultiselect' en onRootClick). Se reinicia
+  // sola cada vez que se entra de nuevo a esta pregunta, porque
+  // attachInputListeners() solo encuentra '#entornoSearch' en el DOM justo
+  // después de un render que aterriza en ella.
+  var entornoSeleccion = [];
 
   function render() {
     var sameScreen = state.screen === lastScreen;
@@ -48,22 +59,15 @@
     }
     lastScreen = state.screen;
     attachInputListeners();
-    syncLandingAutoplay();
+    // El reparto por página de los carruseles lo fija el CSS y solo se puede
+    // leer con el DOM ya pintado, así que va después del innerHTML.
+    sincronizarPortada();
   }
 
-  // El carrusel de landing() avanza solo mientras esa pantalla está activa;
-  // se apaga al salir para no seguir despachando acciones en el fondo.
-  function syncLandingAutoplay() {
-    var shouldRun = state.screen === 'landing';
-    if (shouldRun && !landingTimer) {
-      landingTimer = setInterval(function () {
-        dispatch('nextLandingSlide');
-      }, 5000);
-    } else if (!shouldRun && landingTimer) {
-      clearInterval(landingTimer);
-      landingTimer = null;
-    }
-  }
+  // Los carruseles de la portada NO avanzan solos, igual que en la página real
+  // de Colsubsidio: se mueven con sus flechas y sus guiones. Antes había un
+  // temporizador de 5 s para el carrusel del landing anterior; con cuatro
+  // carruseles a la vez habría sido un baile constante detrás del CTA.
 
   // Los inputs de nombre/apellido/correo/teléfono son "no controlados":
   // reconstruir todo el innerHTML en cada tecla perdería el foco y el
@@ -139,6 +143,11 @@
     for (var d = 0; d < detalles.length; d++) {
       (function (el) {
         el.addEventListener('toggle', function () {
+          // Mismo eco del re-render que en el simulador (ver abajo): acá no
+          // causaba bucle, pero sí una pasada inútil del acordeón en cada
+          // render. Cerrar otro <details> por código sí contradice el estado,
+          // así que el acordeón sigue funcionando.
+          if (state.detalleAbierto[el.dataset.proyecto] === el.open) return;
           state.detalleAbierto[el.dataset.proyecto] = el.open;
           if (!el.open) return;
           for (var o = 0; o < detalles.length; o++) {
@@ -147,13 +156,38 @@
         });
       })(detalles[d]);
     }
-    var sims = root.querySelectorAll('.gdf-sim[data-sim-proyecto]');
-    for (var s = 0; s < sims.length; s++) {
-      (function (el) {
-        el.addEventListener('toggle', function () {
-          state.simAbierto[el.dataset.simProyecto] = el.open;
+    // Los dos controles CONTINUOS del simulador (paso 2 del overlay). No van
+    // por el listener delegado de clics: un re-render en cada arrastre del
+    // slider o en cada tecla del ingreso perdería el foco del input y
+    // reiniciaría las animaciones del panel. Igual que los inputs de la
+    // escarapela, se parchea solo el recibo por DOM directo.
+    var simPlazo = document.getElementById('simPlazo');
+    if (simPlazo) {
+      simPlazo.addEventListener('input', function () {
+        var etiqueta = document.getElementById('simPlazoValor');
+        if (etiqueta) etiqueta.textContent = simPlazo.value + ' años';
+        dispatch('simSet', {
+          proyecto: simPlazo.dataset.proyecto, campo: 'plazo', valor: simPlazo.value,
         });
-      })(sims[s]);
+      });
+    }
+
+    var simIngreso = document.getElementById('simIngreso');
+    if (simIngreso) {
+      simIngreso.addEventListener('input', function () {
+        // Se escribe con separadores de miles ("$4.500.000"), así que hay que
+        // quedarse solo con los dígitos antes de mandarlo al estado.
+        var digitos = simIngreso.value.replace(/\D/g, '');
+        dispatch('simSet', {
+          proyecto: simIngreso.dataset.proyecto, campo: 'ingreso', valor: digitos,
+        });
+      });
+      // El formato bonito se aplica al salir del campo: hacerlo en cada tecla
+      // movería el cursor a un lugar impredecible mientras se escribe.
+      simIngreso.addEventListener('blur', function () {
+        var digitos = parseInt(simIngreso.value.replace(/\D/g, ''), 10);
+        simIngreso.value = digitos ? window.GDF.simulador.pesos(digitos) : '';
+      });
     }
 
     var quizTextInput = document.getElementById('quizTextInput');
@@ -164,6 +198,72 @@
         if (btn) btn.click();
       });
     }
+
+    var entornoSearch = document.getElementById('entornoSearch');
+    if (entornoSearch) {
+      entornoSeleccion = [];
+      renderEntornoChips();
+      var entornoLista = document.getElementById('entornoOpciones');
+      // No hay "modo explorar todo": el panel solo aparece cuando hay algo
+      // escrito y ese algo tiene coincidencias — enfocar el input vacío no
+      // muestra nada, para que sea de verdad un buscador y no un desplegable
+      // disfrazado. Flota pegado al input (ver '.gdf-multi-opt-list' en CSS);
+      // el cierre por "clic afuera" vive en boot() (ver 'cerrarEntornoSiTocaAfuera').
+      entornoSearch.addEventListener('input', function () {
+        var termino = normalizarTexto(entornoSearch.value);
+        var botones = document.querySelectorAll('#entornoOpciones .gdf-multi-opt');
+        var hayCoincidencias = false;
+        for (var i = 0; i < botones.length; i++) {
+          var visible = termino !== '' && normalizarTexto(botones[i].textContent).indexOf(termino) > -1;
+          botones[i].classList.toggle('oculto', !visible);
+          if (visible) hayCoincidencias = true;
+        }
+        if (entornoLista) entornoLista.classList.toggle('abierto', hayCoincidencias);
+      });
+    }
+  }
+
+  // Sin tildes ni mayúsculas, para que "bano" encuentre "Baño" al buscar.
+  function normalizarTexto(s) {
+    return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  // Agrega o quita `valor` de la selección en curso de 'entorno_deseado' y
+  // repinta tanto el botón de la opción como la fila de chips — sin pasar
+  // por dispatch()/render() (ver comentario de `entornoSeleccion`).
+  function toggleEntornoValor(valor) {
+    var idx = entornoSeleccion.indexOf(valor);
+    if (idx > -1) entornoSeleccion.splice(idx, 1);
+    else entornoSeleccion.push(valor);
+    var botones = document.querySelectorAll('#entornoOpciones .gdf-multi-opt');
+    for (var i = 0; i < botones.length; i++) {
+      if (botones[i].dataset.value === valor) {
+        botones[i].classList.toggle('selected', entornoSeleccion.indexOf(valor) > -1);
+      }
+    }
+    renderEntornoChips();
+    // Cierra el panel de resultados apenas se elige algo: la confirmación
+    // visual es el chip nuevo abajo, no dejar la lista abierta encima tapando
+    // la fila de chips que se acaba de actualizar.
+    var lista = document.getElementById('entornoOpciones');
+    if (lista) lista.classList.remove('abierto');
+  }
+
+  function renderEntornoChips() {
+    var cont = document.getElementById('entornoChips');
+    if (!cont) return;
+    var q = findQuestionById('entorno_deseado');
+    cont.innerHTML = entornoSeleccion
+      .map(function (valor) {
+        var opt = q && q.options.filter(function (o) { return o.v === valor; })[0];
+        var label = opt ? opt.label : valor;
+        return (
+          '<span class="gdf-entorno-chip">' + label +
+          '<button type="button" class="gdf-entorno-chip-x" data-action="quitarEntorno" data-value="' + valor + '" aria-label="Quitar ' + label + '">×</button>' +
+          '</span>'
+        );
+      })
+      .join('');
   }
 
   function updateStartButton() {
@@ -195,19 +295,23 @@
     btn.classList.toggle('enabled', valid);
   }
 
-  // El tick del carrusel de landing() dispara cada 5s mientras esa pantalla
-  // está activa. Si pasara por render(), reconstruiría TODO el innerHTML de
-  // la pantalla (nav, hero, banner azul, bento, banner final) y con eso
-  // volverían a dispararse todas las animaciones de entrada (screenIn,
-  // heroFadeIn, etc.) — un flash visible cada 5 segundos. En vez de eso,
-  // igual que con los inputs no controlados, parcheamos por DOM directo
-  // solo la foto/texto/dots del carrusel.
+  // Los carruseles de la portada (y el tick que los avanza solos) no pasan por
+  // render(): reconstruir el innerHTML de la portada entera redispararía sus
+  // animaciones de entrada —un flash cada 5 segundos— y además cortaría la
+  // transición CSS de la pista, con lo que el carrusel saltaría de página en
+  // vez de deslizarse. Se parchea el DOM, igual que con los inputs no
+  // controlados.
   function dispatch(action, dataset) {
     var prevScreen = state.screen;
     var changed = window.GDF.state.applyAction(state, action, dataset);
     if (!changed) return;
-    if (action === 'nextLandingSlide' || action === 'setLandingSlide') {
-      updateLandingSlideDOM();
+    if (action === 'setPortadaSlide' || action === 'nextPortadaSlide' ||
+        action === 'prevPortadaSlide') {
+      updatePortadaSlideDOM((dataset || {}).carrusel);
+      return;
+    }
+    if (action === 'setPortadaFooterTab') {
+      updatePortadaFooterDOM();
       return;
     }
     // Mismo criterio que el carrusel: son cambios DENTRO de una tarjeta ya
@@ -218,10 +322,22 @@
       return;
     }
     if (action === 'simSet') {
-      updateSimuladorDOM(dataset);
+      updateSimuladorDOM();
       return;
     }
     if (action === 'setDetalleAbierto') return; // el <details> ya se pintó solo
+    // Se acaba de elegir el apartamento: se pide su plano ya, para que la
+    // primera pieza que caiga no lo haga contra un hueco en blanco.
+    if (action === 'startQuiz') precargarPlano();
+    // Avanzar o retroceder DENTRO del quiz: la escena no se puede reconstruir
+    // por innerHTML. Si se destruyen y recrean los .gdf-room no hay nodos que
+    // persistan, y entonces cada respuesta rehace el plano entero en vez de
+    // añadirle una pieza.
+    if ((action === 'selectOption' || action === 'goBack') &&
+        prevScreen === 'quiz' && state.screen === 'quiz') {
+      updateQuizDOM();
+      return;
+    }
     render();
 
     // PASO 1 del contrato. El quiz termina y entra a 'result' exactamente una
@@ -299,60 +415,286 @@
     }
   }
 
-  // Recalcula la cuota al mover "cuota inicial" o "plazo". Repinta solo el
-  // bloque de resultado; los controles se actualizan moviendo .active.
-  function updateSimuladorDOM(ds) {
-    var card = cardDe(ds.proyecto);
-    if (!card) return;
-    // Puede haber un simulador por tipología: se actualiza el del panel
-    // visible (o el único que exista, en proyectos sin tipologías).
-    var body =
-      card.querySelector('.gdf-tipo-panel.active .gdf-sim-body') ||
-      card.querySelector('.gdf-sim-body');
-    if (!body) return;
+  // -------------------------------------------------------------------------
+  // Quiz: avanzar de pregunta sin reconstruir la escena
+  // -------------------------------------------------------------------------
 
-    var cfg = state.simConfig[ds.proyecto] || {};
-    var S = window.GDF.simulador.SUPUESTOS;
-    var inicial = cfg.inicial || S.cuotaInicialDefault;
-    var plazo = cfg.plazo || S.plazoDefault;
+  /**
+   * El panel de la pregunta SÍ se repinta entero (no tiene nada que preservar);
+   * la escena se parchea nodo a nodo para que las piezas ya pintadas se muevan
+   * en vez de volver a caer.
+   */
+  function updateQuizDOM() {
+    var derived = window.GDF.state.computeDerived(state);
+    var panel = root.querySelector('.gdf-quiz');
+    // La losa y la silueta existen desde antes de la primera respuesta y no se
+    // van ni retrocediendo hasta el principio, así que a mitad del quiz nunca
+    // hace falta reconstruir la escena por innerHTML.
+    if (!panel) return render();
+    panel.outerHTML = window.GDF.templates.quizPanel(state, derived);
+    // IMPRESCINDIBLE: el panel nuevo trae nodos nuevos. Sin volver a enganchar,
+    // mueren el input numérico de 'edad' (pregunta 4) y el buscador con chips
+    // de 'entorno_deseado' (la 8), y el fallo es silencioso hasta que alguien
+    // llega hasta ahí.
+    attachInputListeners();
+    updatePlantaDOM(derived);
+    updateEscenaExtrasDOM(derived);
+  }
 
-    var botones = body.querySelectorAll('.gdf-sim-opt');
-    for (var i = 0; i < botones.length; i++) {
-      var b = botones[i];
-      var esperado = b.dataset.campo === 'inicial' ? inicial : plazo;
-      b.classList.toggle('active', Number(b.dataset.valor) === esperado);
-    }
+  /**
+   * Lo que rodea a la planta y tampoco puede repintarse por innerHTML sin
+   * matar la escena: la altura según el piso, el nombre de la localidad y el
+   * halo con las zonas comunes reales del proyecto.
+   */
+  function updateEscenaExtrasDOM(derived) {
+    var escena = root.querySelector('.gdf-scene');
+    if (!escena) return;
+    var planta = derived.planta;
+    var a = state.answers || {};
 
-    var out = body.querySelector('.gdf-sim-out');
-    if (out) {
-      out.innerHTML = window.GDF.templates.simuladorResultado(
-        Number(body.dataset.precio),
-        body.dataset.vis === '1',
-        inicial,
-        plazo,
-        state.answers.ingresos
-      );
+    if (a.piso_preferido) escena.dataset.piso = a.piso_preferido;
+    else delete escena.dataset.piso;
+
+    // El halo solo existe una vez contestada la pregunta de entorno.
+    var halo = escena.querySelector('.gdf-halo');
+    var htmlHalo = a.entorno_deseado ? window.GDF.templates.haloAmenidadesHtml(planta, a) : '';
+    if (halo && halo.parentNode) halo.parentNode.removeChild(halo);
+    if (htmlHalo) {
+      var losa = escena.querySelector('.gdf-losa');
+      if (losa) losa.insertAdjacentHTML('afterend', htmlHalo);
+      else escena.insertAdjacentHTML('beforeend', htmlHalo);
     }
   }
 
-  function updateLandingSlideDOM() {
-    var SLIDES = window.GDF.data.LANDING_SLIDES;
-    var slide = SLIDES[state.landingSlide] || SLIDES[0];
+  /**
+   * Casa las piezas pintadas con las que toca mostrar, por `data-room`:
+   *   - la que no existía -> cae de la grúa (.animated)
+   *   - la que ya estaba  -> se deja quieta (solo se le quita .animated)
+   *   - la que sobra      -> se la lleva la grúa (.saliendo) y queda el hueco
+   */
+  function updatePlantaDOM(derived) {
+    var losa = root.querySelector('.gdf-losa');
+    if (!losa) return;
 
-    var img = document.querySelector('.gdf-landing-hero-photo img');
-    if (img) {
-      img.src = slide.image;
-      img.alt = slide.title;
+    // El apartamento cambió (pasa una sola vez: al contestar cuántas alcobas
+    // quiere). Las piezas ya puestas NO se destruyen — se reacomodan y cambian
+    // de imagen, que es lo que hace que se lea como "el plano se ajusta a lo
+    // que pediste" y no como un parpadeo.
+    if (derived.planta && losa.dataset.sello !== derived.planta.sello) {
+      reacomodarPlano(losa, derived);
+    } else if (derived.planta && derived.planta.ajustada) {
+      // Se contestó lo de las alcobas y el plano provisional YA las tenía, así
+      // que no hay nada que reacomodar. Se anima igual: si no, la misma
+      // respuesta unas veces mueve el plano y otras no hace nada, y se lee
+      // como que la app se quedó colgada. Ver `ajustarPlantaAHabitaciones`.
+      var puestas = losa.querySelectorAll('.gdf-room');
+      for (var k = 0; k < puestas.length; k++) marcarReacomodo(puestas[k]);
     }
-    var h1 = document.querySelector('.gdf-landing-hero-text h1');
-    if (h1) h1.textContent = slide.title;
-    var p = document.querySelector('.gdf-landing-hero-text p');
-    if (p) p.textContent = slide.desc;
 
-    var dots = document.querySelectorAll('.gdf-landing-dot');
-    for (var i = 0; i < dots.length; i++) {
-      dots[i].classList.toggle('active', i === state.landingSlide);
+    var vivos = {};
+    var nuevas = 0;
+    derived.rooms.forEach(function (room) {
+      vivos[room.id] = true;
+      apagarHueco(losa, room.id, true);
+      var el = losa.querySelector('[data-room="' + room.id + '"]');
+      if (el) {
+        // Ya estaba: se le quita .animated para que NO vuelva a caer de la
+        // grúa. Su geometría no cambia nunca —el apartamento es fijo—, así que
+        // no hay nada más que tocarle.
+        el.classList.remove('animated');
+        return;
+      }
+      losa.insertAdjacentHTML('beforeend', window.GDF.templates.cuartoHtml(room, true));
+      // Escalonadas: cuando una respuesta destapa varias piezas caen una
+      // detrás de otra en vez de todas de golpe.
+      losa.lastElementChild.style.animationDelay = nuevas * 0.12 + 's';
+      nuevas++;
+    });
+
+    var todos = losa.querySelectorAll('.gdf-room');
+    for (var i = 0; i < todos.length; i++) {
+      if (vivos[todos[i].dataset.room]) continue;
+      retirarPieza(todos[i]);
+      apagarHueco(losa, todos[i].dataset.room, false);
     }
+  }
+
+  /**
+   * Enciende o apaga el hueco gris que hay DEBAJO de una pieza.
+   *
+   * Las piezas van en `mix-blend-mode: multiply` para que el papel blanco del
+   * plano desaparezca contra el fondo de la escena (si no, las esquinas donde
+   * el apartamento no llega se ven como bloques blancos, o sea como piezas que
+   * faltan). Multiplicar contra el gris del hueco entintaría el plano entero,
+   * así que el hueco se apaga en cuanto su pieza está puesta y se vuelve a
+   * encender si la grúa se la lleva.
+   */
+  function apagarHueco(losa, id, apagar) {
+    var hueco = losa.querySelector('.gdf-hueco[data-hueco="' + id + '"]');
+    if (hueco) hueco.style.opacity = apagar ? '0' : '';
+  }
+
+  // Los planos pesan ~78 KB de media y hasta 240 KB. Se pide en cuanto se
+  // elige el apartamento (al empezar el quiz) para que la primera pieza que
+  // cae ya tenga la imagen decodificada y no aparezca en blanco.
+  var planoPrecargado = null;
+  function precargarPlano() {
+    var src = state.planta && state.planta.plano;
+    if (!src || src === planoPrecargado) return;
+    planoPrecargado = src;
+    var img = new Image();
+    img.src = src;
+  }
+
+  /**
+   * Cambia el plano de debajo sin tirar lo construido. Funciona porque todas
+   * las plantas del sorteo se trocean igual (12 celdas, c0..c11): cada pieza
+   * pintada encuentra su equivalente en el plano nuevo, se desplaza a su sitio
+   * con la transición CSS y cruza a la imagen nueva.
+   */
+  function reacomodarPlano(losa, derived) {
+    var planta = derived.planta;
+    losa.dataset.sello = planta.sello;
+    losa.style.setProperty('--ratio', planta.ratio);
+    losa.style.setProperty('--wmax', planta.wmax + 'px');
+
+    var silueta = losa.querySelector('.gdf-silueta');
+    if (silueta) silueta.outerHTML = window.GDF.templates.siluetaHtml(derived.huecos, derived.rooms);
+
+    var porId = {};
+    derived.rooms.forEach(function (r) { porId[r.id] = r; });
+
+    var pintadas = losa.querySelectorAll('.gdf-room');
+    for (var i = 0; i < pintadas.length; i++) {
+      var el = pintadas[i];
+      var room = porId[el.dataset.room];
+      // Las que ya no tocan las retira el bucle de sobrantes de updatePlantaDOM.
+      if (!room) continue;
+      el.classList.remove('animated');
+      el.style.cssText = room.styleText;
+      var lienzo = el.querySelector('.lienzo');
+      if (lienzo) lienzo.style.cssText = room.lienzoStyle;
+      marcarReacomodo(el);
+    }
+  }
+
+  // La clase se quita al terminar para que la animación pueda volver a
+  // dispararse si el plano cambiara otra vez.
+  function marcarReacomodo(el) {
+    el.classList.remove('reacomodo');
+    void el.offsetWidth;
+    el.classList.add('reacomodo');
+    setTimeout(function () {
+      el.classList.remove('reacomodo');
+    }, 700);
+  }
+
+  function retirarPieza(el) {
+    el.classList.remove('animated');
+    el.classList.add('saliendo');
+    setTimeout(function () {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 300);
+  }
+
+  // Recalcula el recibo al mover cualquier control del paso 2 del simulador.
+  // Repinta SOLO '#simResultado'; los botones segmentados se actualizan
+  // moviéndoles la clase .active, sin tocar el resto del panel — así el
+  // slider no pierde el arrastre ni el input de ingreso el foco.
+  function updateSimuladorDOM() {
+    var ctx = window.GDF.templates.contextoSimulador(state);
+    if (!ctx) return;
+
+    var panel = document.querySelector('.gdf-credito-modal');
+    if (!panel) return;
+
+    var botones = panel.querySelectorAll('.gdf-simc-opt');
+    for (var i = 0; i < botones.length; i++) {
+      var b = botones[i];
+      // Todos los valores se comparan como STRING: los campos del simulador
+      // mezclan números (inicial) con etiquetas ('uvr', 'A'), y normalizar en
+      // un solo sentido evita una comparación distinta por campo.
+      b.classList.toggle('active', b.dataset.valor === String(ctx.cfg[b.dataset.campo]));
+    }
+
+    // El interruptor del complementario no es un segmento: alterna, así que
+    // su data-valor tiene que quedar apuntando a la acción CONTRARIA.
+    var swProducto = panel.querySelector('.gdf-simc-producto[data-campo="complementario"]');
+    if (swProducto) {
+      swProducto.classList.toggle('on', ctx.cfg.complementario);
+      swProducto.dataset.valor = ctx.cfg.complementario ? '0' : '1';
+    }
+
+    var out = document.getElementById('simResultado');
+    if (out) {
+      out.innerHTML = window.GDF.templates.simuladorResultado(ctx, state.answers.ingresos);
+    }
+  }
+
+  // Mueve UNA pista de la portada y su fila de guiones. No pasa por render()
+  // por dos motivos: reconstruir el innerHTML redispararía las animaciones de
+  // entrada de toda la portada (se vería como una recarga) y, sobre todo,
+  // cortaría la transición CSS de la pista — el carrusel saltaría de página en
+  // vez de deslizarse.
+  function updatePortadaSlideDOM(clave) {
+    if (!clave) return;
+    var i = state.portadaSlides[clave] || 0;
+
+    // Solo el índice: el desplazamiento lo calcula el CSS (--paso/--sangria).
+    var pista = document.querySelector('.pt-pista[data-pista="' + clave + '"]');
+    if (pista) pista.style.setProperty('--i', i);
+
+    var guiones = document.querySelectorAll(
+      '.pt-guion[data-carrusel="' + clave + '"]'
+    );
+    for (var k = 0; k < guiones.length; k++) {
+      guiones[k].classList.toggle('activo', k === i);
+    }
+  }
+
+  var CARRUSELES_PORTADA = ['propios', 'ciudades', 'aliados', 'opciones'];
+
+  // Cuántas tarjetas entran por página lo decide el CSS y cambia con el ancho
+  // de la ventana: en el teléfono entra UNA donde en escritorio entran tres.
+  // Eso mueve el número de páginas, así que hay que rehacer los guiones y
+  // recolocar la página actual. Sin esto, en móvil se pintaban los 4 guiones
+  // del escritorio y las 6 últimas tarjetas de "Proyectos propios" no había
+  // forma de alcanzarlas.
+  function sincronizarPortada() {
+    if (!document.querySelector('.gdf-portada')) return;
+    CARRUSELES_PORTADA.forEach(function (clave) {
+      var n = window.GDF.templates.paginasPortada(clave);
+      var i = Math.min(state.portadaSlides[clave] || 0, n - 1);
+      state.portadaSlides[clave] = i;
+
+      var caja = document.querySelector('.pt-nav[data-nav="' + clave + '"] .pt-guiones');
+      if (caja && caja.children.length !== n) {
+        caja.innerHTML = window.GDF.templates.guionesHtml(clave, n, i);
+      }
+      updatePortadaSlideDOM(clave);
+    });
+  }
+
+  // El footer de pestañas sí cambia de CONTENIDO, no solo de posición, así que
+  // se repinta la lista de enlaces entera; es un bloque pequeño y sin estado
+  // que preservar (ningún input, ningún scroll propio).
+  function updatePortadaFooterDOM() {
+    var P = window.GDF_PORTADA;
+    if (!P) return;
+    var pestanas = (P.footer || {}).pestanas || [];
+    var activa = state.portadaFooterTab || 0;
+
+    var tabs = document.querySelectorAll('.pt-tab');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('activo', i === activa);
+
+    var caja = document.querySelector('.pt-flinks');
+    if (!caja) return;
+    caja.innerHTML = ((pestanas[activa] || {}).links || []).map(function (l) {
+      var txt = window.GDF.templates.esc(l.texto);
+      return l.url
+        ? '<a class="pt-flink" href="#" data-action="noop">' + txt + '</a>'
+        : '<span class="pt-flink pt-flabel">' + txt + '</span>';
+    }).join('');
   }
 
   function findQuestionById(qid) {
@@ -366,6 +708,16 @@
   function onRootClick(e) {
     var el = e.target.closest('[data-action]');
     if (!el) return;
+
+    // 'noop' es el freno del burbujeo (el <details> de las tarjetas, el panel
+    // del simulador, y todos los enlaces clonados del portal de Colsubsidio en
+    // la portada). Esos van en <a href="#">, así que además hay que cortar la
+    // navegación: sin esto, cada clic en un enlace decorativo mete un '#' en la
+    // URL y salta el scroll al principio de la portada.
+    if (el.dataset.action === 'noop') {
+      if (el.tagName === 'A') e.preventDefault();
+      return;
+    }
 
     // Acciones que hacen I/O: no pasan por applyAction/dispatch porque no son
     // un cambio de estado puro, sino el disparo de una llamada de red.
@@ -399,26 +751,57 @@
       dispatch('selectOption', { qid: el.dataset.qid, value: txtInput ? txtInput.value.trim() : '' });
       return;
     }
-    // 'entorno_deseado' es un checklist de casillas (no controladas, igual que
-    // los inputs de texto) dentro de un <details> desplegable. Al continuar se
-    // leen las marcadas y se guarda un ARRAY con sus `value`, que son las
-    // etiquetas exactas que espera el backend (ver data.js). No se aplana a
-    // texto ni se traduce al `label`: el contrato pide el array tal cual.
+    // 'entorno_deseado' se responde con el buscador con chips de arriba
+    // (selección no controlada, igual que los inputs de texto — ver
+    // `entornoSeleccion`). Al continuar se despacha ese arreglo tal cual: son
+    // las etiquetas `v` exactas que espera el backend (ver data.js), no se
+    // aplanan a texto ni se traducen al `label`.
     if (el.dataset.action === 'answerQuizMultiselect') {
-      var checked = document.querySelectorAll('#quizMultiselect input[type="checkbox"]:checked');
-      var valores = Array.prototype.map.call(checked, function (input) {
-        return input.value;
-      });
-      dispatch('selectOption', { qid: el.dataset.qid, value: valores });
+      dispatch('selectOption', { qid: el.dataset.qid, value: entornoSeleccion.slice() });
+      return;
+    }
+    if (el.dataset.action === 'toggleEntorno' || el.dataset.action === 'quitarEntorno') {
+      toggleEntornoValor(el.dataset.value);
       return;
     }
 
     dispatch(el.dataset.action, el.dataset);
   }
 
+  // Cierra el panel de opciones de 'entorno_deseado' al tocar fuera de él
+  // (patrón típico de combobox). Registrado UNA sola vez a nivel de
+  // documento — si viviera en attachInputListeners() se duplicaría en cada
+  // render y se acumularían listeners fantasma. Comprueba los IDs en cada
+  // clic porque el <input>/panel solo existen mientras esa pregunta está en
+  // pantalla; en cualquier otra pantalla no hace nada.
+  function cerrarEntornoSiTocaAfuera(e) {
+    var combo = document.querySelector('.gdf-entorno-combo');
+    var lista = document.getElementById('entornoOpciones');
+    if (!combo || !lista) return;
+    if (!combo.contains(e.target)) lista.classList.remove('abierto');
+  }
+
+  // Escape cierra el simulador. Mismo criterio que el listener de arriba: se
+  // registra una sola vez en boot(), no por render.
+  function cerrarModalConEscape(e) {
+    if (e.key !== 'Escape' || !state.simulador) return;
+    dispatch('cerrarSimulador', {});
+  }
+
   function boot() {
     root = document.getElementById('root');
     root.addEventListener('click', onRootClick);
+    document.addEventListener('click', cerrarEntornoSiTocaAfuera);
+    document.addEventListener('keydown', cerrarModalConEscape);
+    // Girar el teléfono o cambiar el tamaño de la ventana cruza los breakpoints
+    // de la portada y con ellos el reparto por página de los carruseles. Va
+    // con un pequeño retardo porque 'resize' dispara decenas de veces por
+    // arrastre y rehacer los guiones en cada una es trabajo tirado.
+    var reajuste = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(reajuste);
+      reajuste = setTimeout(sincronizarPortada, 150);
+    });
     render();
   }
 

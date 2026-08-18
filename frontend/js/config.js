@@ -22,4 +22,16 @@ window.GDF_CONFIG = {
   // después de un rato puede tardar ~25 s en responder. Eso no es un error y la
   // pantalla de carga lo explica sola a partir de los 8 s.
   RECOMMENDER: 'hibrido',
+
+  // MODO DEMO SIN RED. En true la app no llama al backend en ningún momento:
+  // las recomendaciones salen del motor local (las mismas tarjetas reales que
+  // en 'hibrido') y la confirmación se da por cerrada en el navegador SIN
+  // registrar el lead. La pantalla de cierre lo dice con todas las letras —
+  // esto no simula un envío que no ocurrió.
+  //
+  // Existe para la versión de UN SOLO ARCHIVO que genera
+  // tools/empaquetar_demo.py, pensada para compartir por link: ahí la política
+  // de seguridad del visor bloquea cualquier petición externa, así que sin esto
+  // el recorrido terminaría en la pantalla de error de red.
+  SIN_BACKEND: false,
 };

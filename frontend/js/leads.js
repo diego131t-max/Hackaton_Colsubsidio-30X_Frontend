@@ -146,6 +146,14 @@
     var body = buildSenalBowl(state, idProyecto);
     var base = apiBase();
 
+    // Demo sin red (ver SIN_BACKEND en js/config.js): se cierra el recorrido
+    // en el navegador. `demo: true` viaja hasta la pantalla de cierre, que
+    // avisa de que el lead NO quedó registrado — no se finge un envío.
+    if ((window.GDF_CONFIG || {}).SIN_BACKEND) {
+      cb({ estado: 'ok', demo: true });
+      return;
+    }
+
     if (!base || !leadId) {
       console.error('[GDF/leads] Falta API_BASE o lead_id — no se puede confirmar.', { leadId: leadId });
       cb({ estado: 'error', error: 'Falta el identificador del lead.' });

@@ -42,7 +42,7 @@ informacion verdadera aunque menos precisa. NUNCA se inventa una direccion.
 QUE NO HACE
 -----------
 - No calcula `match_score`: eso es del backend, depende del lead.
-- No inventa amenidades. Las que no encajan en el vocabulario de 25 del backend
+- No inventa amenidades. Las que no encajan en el vocabulario de 26 del backend
   (cuarto de residuos, subestacion electrica, ascensor, oratorio...) se
   descartan en vez de forzarlas a una categoria que no les corresponde.
 """
@@ -66,7 +66,7 @@ APP = os.path.dirname(AQUI)
 SALIDA = os.path.join(APP, "data", "proyectos_seed.json")
 CACHE = os.path.join(AQUI, ".cache_fichas.json")
 
-# El vocabulario de 25 etiquetas y las reglas que mapean el texto libre del
+# El vocabulario de 26 etiquetas y las reglas que mapean el texto libre del
 # sitio a esas claves VIVEN EN scrape_proyectos.py (VOCABULARIO y
 # clave_de_amenidad), porque el catalogo de la app tambien las necesita: cruza
 # las amenidades de cada proyecto con el `entorno_deseado` que eligio el
