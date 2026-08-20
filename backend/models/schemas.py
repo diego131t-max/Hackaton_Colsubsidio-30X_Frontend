@@ -178,19 +178,16 @@ class ResultadoCalificacionDapta(BaseModel):
         analisis = cuerpo.get("call_analysis") or {}
         extraidos = analisis.get("custom_analysis_data") or {}
 
+        # Se toma TODO campo del modelo que venga en la raiz, no una lista fija
+        # de siete. Con la lista fija, un cuerpo plano perdia en silencio
+        # calificacion_lead, resumen_llamada y los demas: el webhook respondia
+        # 200 y el lead quedaba sin ficha igual que si no hubiera llegado.
+        conocidos = set(cls.model_fields)
         datos: dict[str, Any] = {
-            # Lo de la llamada vive en la raiz de `call`.
-            **{
-                k: cuerpo.get(k)
-                for k in (
-                    "call_id", "call_status", "to_number", "from_number",
-                    "disconnection_reason", "transcript", "recording_url",
-                )
-                if cuerpo.get(k) is not None
-            },
-            # La calificacion vive en custom_analysis_data.
-            **{k: v for k, v in extraidos.items() if v is not None},
+            k: v for k, v in cuerpo.items() if k in conocidos and v is not None
         }
+        # La extraccion del agente manda sobre la raiz: es el dato mas especifico.
+        datos.update({k: v for k, v in extraidos.items() if v is not None})
 
         # Si el agente no lleno resumen_llamada, el resumen generico de Dapta es
         # mejor que nada: el asesor necesita algo que leer.
