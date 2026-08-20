@@ -319,6 +319,10 @@ async def guardar_resultado(resultado: ResultadoCalificacionDapta) -> dict[str, 
                 "filas": len(filas),
                 "criterio": criterio,
                 "agendado_para": cuerpo.get("agendado_para"),
+                # La fila actualizada viaja de vuelta para que el webhook pueda
+                # redactar el seguimiento SIN volver a consultar: necesita el
+                # nombre, el correo y el proyecto, y ya los tenemos aqui.
+                "lead": filas[0],
             }
         return {
             "estado": "sin_match",

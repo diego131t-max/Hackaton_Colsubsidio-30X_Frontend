@@ -77,3 +77,18 @@ SUPABASE_URL: str | None = os.environ.get("SUPABASE_URL")
 # Key con permiso de escritura. En el hackathon vale la publishable (RLS permisiva);
 # en producción usar service_role y cerrar RLS.
 SUPABASE_KEY: str | None = os.environ.get("SUPABASE_KEY")
+
+
+# --------------------------------------------------------------------------- #
+# Seguimiento por CORREO cuando no contestan la llamada.
+# Alternativa disponible HOY a WhatsApp, que depende del tramite con Meta.
+# Apagado por defecto: sin credenciales el envio es un no-op.
+# --------------------------------------------------------------------------- #
+CORREO_ACTIVO: bool = os.environ.get("CORREO_ACTIVO", "false").strip().lower() in (
+    "1", "true", "yes", "si", "sí",
+)
+SMTP_HOST: str | None = os.environ.get("SMTP_HOST")
+SMTP_PUERTO: int = int(os.environ.get("SMTP_PUERTO", "587"))
+SMTP_USUARIO: str | None = os.environ.get("SMTP_USUARIO")
+SMTP_CLAVE: str | None = os.environ.get("SMTP_CLAVE")
+CORREO_REMITENTE: str | None = os.environ.get("CORREO_REMITENTE")

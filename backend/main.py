@@ -42,7 +42,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend import config
 from backend.core import clustering_client, handoff_card
-from backend.integrations import dapta_client, recomendaciones_client, supabase_client
+from backend.integrations import (
+    correo_client,
+    dapta_client,
+    recomendaciones_client,
+    supabase_client,
+)
 from backend.models.schemas import (
     ResultadoCalificacionDapta,
     SenalBowl,
@@ -326,7 +331,13 @@ async def webhook_dapta_resultado(
         background.add_task(
             dapta_client.enviar_whatsapp_seguimiento, resultado.telefono_correlacion
         )
-        logger.info("Lead sin contestar (%s): encolado seguimiento WhatsApp (gated).",
+        # Y por correo, que es el canal que SI esta disponible hoy: WhatsApp
+        # depende del tramite con Meta y Dapta no tiene SMS. Los dos van
+        # gated, asi que se enciende el que este listo sin tocar codigo.
+        background.add_task(
+            correo_client.enviar_seguimiento, resultado_persistencia.get("lead")
+        )
+        logger.info("Lead sin contestar (%s): encolado seguimiento (WhatsApp + correo, gated).",
                     resultado.telefono_correlacion)
 
     # Compatibilidad: si había una ficha en memoria, también se completa.
