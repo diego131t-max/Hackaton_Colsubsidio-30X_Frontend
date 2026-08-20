@@ -88,6 +88,56 @@ def construir(ruta_variante: Path) -> str:
 # Bloques del núcleo que NO tienen sentido en un agente de texto: son maquinaria
 # de voz. Dejarlos dentro del company_description no rompe nada, pero gasta
 # contexto y arriesga que el agente escriba " - - - " o hable de "end_call".
+
+# El contexto del agente de TEXTO viaja en una sola peticion, y el balanceador
+# de Dapta corta en 8192 bytes. Con el catalogo en la prosa de la version de
+# voz la peticion pesaba 8702 y era imposible crear el agente. Aqui se compacta
+# a una linea por proyecto: misma informacion, un tercio del tamano.
+MAX_AMENIDADES = 6
+
+
+def compactar_catalogo() -> str:
+    """Catalogo en formato de una linea por proyecto, para agentes de texto."""
+    import json
+
+    # El seed del FRONTEND es el scrapeo crudo: trae `localidad` con mayusculas
+    # ("Bosa"). El del backend la guarda normalizada para el filtro del modelo
+    # ("bosa") y bajo otro nombre, asi que aqui no sirve: salia "None".
+    seed = json.loads((RAIZ / "frontend" / "data" / "proyectos_seed.json").read_text(encoding="utf-8"))
+    lineas = []
+    for p in sorted(seed, key=lambda x: clave_orden(x.get("nombre_proyecto", ""))):
+        am = [a for a in (p.get("amenidades_entorno") or [])][:MAX_AMENIDADES]
+        precio = p.get("precio_desde_cop")
+        lineas.append(
+            f"- {p.get('nombre_proyecto')} · {p.get('localidad')} · desde "
+            f"${int(precio):,}".replace(",", ".")
+            + f" · {p.get('area_construida_m2')} m2"
+            + f" · {formatear_habitaciones(p.get('habitaciones_ofrecidas'))} hab"
+            + (" · con subsidio" if p.get("aplica_subsidio_caja") else "")
+            + (f" · {', '.join(am)}" if am else "")
+        )
+    return (
+        "Catalogo real de Colsubsidio (precios desde). Usalo para dar detalles o "
+        "si preguntan por un proyecto puntual. Si preguntan por uno que NO esta "
+        "aqui, no lo afirmes: di que el asesor tiene el detalle completo.\n\n"
+        + "\n".join(lineas)
+    )
+
+
+def formatear_habitaciones(valor) -> str:
+    """`[2, 3]` -> "2 o 3". Sin esto se imprimia la lista de Python tal cual."""
+    if isinstance(valor, list):
+        return " o ".join(str(v) for v in valor) if valor else "?"
+    return str(valor)
+
+
+def clave_orden(nombre: str) -> str:
+    """Orden alfabetico insensible a tildes (Alamo no debe ir despues de Vibo)."""
+    import unicodedata
+
+    return unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode().lower()
+
+
 def contexto_whatsapp(perfil: str) -> str:
     """
     company_description para el agente de TEXTO.
@@ -96,14 +146,7 @@ def contexto_whatsapp(perfil: str) -> str:
     conocimiento (catálogo + criterio) entra por aquí. Se excluye todo lo que
     solo aplica a una llamada.
     """
-    catalogo = sin_comentarios((NUCLEO / "catalogo-proyectos.md").read_text(encoding="utf-8"))
-    # El catálogo del núcleo menciona {{proyecto_recomendado}}, que en texto no
-    # existe: se reescribe la instrucción sin el token.
-    catalogo = catalogo.replace(
-        "Guíate por\n{{proyecto_recomendado}}; usa la lista para dar detalles o si preguntan por\nun proyecto puntual.",
-        "Usa la lista para dar detalles o si preguntan por un proyecto puntual.",
-    )
-    catalogo = re.sub(r"\{\{\w+\}\}", "el proyecto recomendado", catalogo)
+    catalogo = compactar_catalogo()
 
     if perfil == "afiliados":
         encabezado = (
