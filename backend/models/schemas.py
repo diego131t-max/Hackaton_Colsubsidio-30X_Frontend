@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -132,6 +132,32 @@ class SenalBowl(BaseModel):
 # conversación.
 # =========================================================================== #
 class ResultadoCalificacionDapta(BaseModel):
+    # Dapta rellena lo que no pudo extraer de DOS formas distintas, ninguna de
+    # ellas null. Confirmado en llamadas reales de este workspace:
+    #
+    #   - campos de texto sin dato  ->  el booleano `false`
+    #     (fecha_hora_agendada, ahorros_cesantias_declarado, ...)
+    #   - llamada sin contestar     ->  la cadena vacia en TODOS los campos,
+    #     incluido calificacion_lead, que es un Literal y la rechaza
+    #
+    # Sin esta coercion el webhook responde 422 y el lead se queda sin ficha.
+    # Y pasaria en la mayoria de las llamadas, porque el caso frecuente no es la
+    # conversacion completa: es que no contesten.
+    @field_validator(
+        "calificacion_lead", "justificacion_calificacion", "fecha_hora_agendada",
+        "modalidad_agendada", "ahorros_cesantias_declarado",
+        "vivienda_nombre_propio_o_herencia", "resumen_llamada",
+        mode="before",
+    )
+    @classmethod
+    def _sin_dato_es_none(cls, v: Any) -> Any:
+        # `false` y "" significan "no lo supe". Un `true` en un campo de texto
+        # seria un dato corrupto que SI queremos que reviente, no que se cuele
+        # convertido en la cadena "True".
+        if v is False or (isinstance(v, str) and not v.strip()):
+            return None
+        return v
+
     call_id: str
     call_status: str
     # Opcional: en llamadas sin contestar (no_answer/voicemail) Dapta no produce
