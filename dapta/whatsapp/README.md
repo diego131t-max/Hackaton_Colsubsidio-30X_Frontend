@@ -110,3 +110,35 @@ important_instructions:
 - No hay `end_call`: la conversación queda abierta.
 - La brevedad sigue mandando, pero por otra razón: en WhatsApp un párrafo largo
   no se lee, se ignora.
+
+---
+
+## Agentes de texto creados (cuenta nueva)
+
+| Agente | ID | Perfil |
+|---|---|---|
+| Leo | `54585ba3-46f9-4a89-bd04-cc7c693fee38` | Afiliados |
+| Leo — No Afiliados | `8bf69697-5009-45ff-b490-e9f23d410ccd` | No afiliados |
+
+Se abren en `https://app.dapta.ai/agents-studio/text-agents/<id>/settings`.
+
+### Dos limitaciones medidas al crearlos
+
+**El contexto no puede pasar de ~7 KB.** La creacion viaja en UNA peticion y el
+balanceador corta en 8192 bytes; con el catalogo en la prosa de la version de
+voz la peticion pesaba 8702 y era imposible crear el agente. Por eso
+`construir_prompts.py` genera ahora un catalogo compacto de una linea por
+proyecto para los agentes de texto.
+
+**El asistente COMPRIME el contexto al generar el prompt.** El prompt de Leo
+salio con 6828 caracteres y menciona Acanto y Bosa, pero perdio Florecer y
+Urbania. Es decir: el agente sabe que hay un catalogo y conoce parte, pero no
+los 31 proyectos. Si en las pruebas se ve que inventa o que difiere demasiado
+al asesor, el arreglo es editar el prompt generado y pegar el catalogo completo
+ahi — eso si cabe, porque se hace desde la interfaz y no por la API.
+
+### Duplicados a limpiar
+
+Hay tres agentes llamados `Leo` (`ad6bb791`, `ff544746`, `54585ba3`). Los dos
+primeros son intentos previos sin el catalogo compacto. Conviene quedarse solo
+con `54585ba3` para no asignar el equivocado a un canal.
