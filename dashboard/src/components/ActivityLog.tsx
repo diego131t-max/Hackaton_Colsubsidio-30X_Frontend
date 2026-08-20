@@ -33,13 +33,28 @@ export function ActivityLog({ entradas }: Props) {
         <p className="empty">Sin actividad todavía…</p>
       ) : (
         <ul className="log">
-          {entradas.map((e) => (
-            <li className="log__row" key={e.id} data-tono={e.tono}>
-              <span className="log__time">{antiguedad(e.ts)}</span>
-              <span className="log__dot" />
-              <span className="log__text">{e.texto}</span>
-            </li>
-          ))}
+          {entradas.map((e, i) => {
+            // El texto llega como "Nombre: lo que paso". Separarlo permite dar
+            // peso al nombre, que es por donde el ojo busca en una lista larga.
+            const corte = e.texto.indexOf(": ");
+            const quien = corte > 0 ? e.texto.slice(0, corte) : null;
+            const que = corte > 0 ? e.texto.slice(corte + 2) : e.texto;
+            return (
+              <li
+                className="log__row"
+                key={e.id}
+                data-tono={e.tono}
+                style={{ ["--orden" as string]: Math.min(i, 12) }}
+              >
+                <span className="log__time">{antiguedad(e.ts)}</span>
+                <span className="log__dot" />
+                <span className="log__text">
+                  {quien && <b className="log__quien">{quien}</b>}
+                  {que}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

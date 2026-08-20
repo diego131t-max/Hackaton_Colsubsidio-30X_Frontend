@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { SystemMap } from "./components/SystemMap";
 import { Tablero } from "./components/Tablero";
+import { Kpi } from "./components/Kpi";
 import { PluginsPanel } from "./components/PluginsPanel";
 import { ActivityLog, type EntradaLog } from "./components/ActivityLog";
 import { LeadDetail } from "./components/LeadDetail";
@@ -172,33 +173,18 @@ export function App() {
       ) : (
         <>
         <div className="kpis">
-          <div className="kpi">
-            <span className="kpi__num">{captados}</span>
-            <span className="kpi__lbl">Leads captados</span>
-            <span className="kpi__sub">formulario completado</span>
-          </div>
-          <div className="kpi">
-            <span className="kpi__num">{contactados}</span>
-            <span className="kpi__lbl">Contactados por Manuela</span>
-            <span className="kpi__sub">{pct(contactados)}</span>
-          </div>
-          <div className="kpi">
-            <span className="kpi__num" data-cal="caliente">
-              {calientes}
-            </span>
-            <span className="kpi__lbl">Calientes</span>
-            <span className="kpi__sub">listos para cerrar</span>
-          </div>
-          <div className="kpi">
-            <span className="kpi__num">{entregados}</span>
-            <span className="kpi__lbl">Fichas al asesor</span>
-            <span className="kpi__sub">{pct(entregados)}</span>
-          </div>
+          <Kpi orden={0} valor={captados} etiqueta="Leads captados"
+               sub="formulario completado" proporcion={1} />
+          <Kpi orden={1} valor={contactados} etiqueta="Contactados por Manuela"
+               sub={pct(contactados)} proporcion={captados ? contactados / captados : 0} />
+          <Kpi orden={2} valor={calientes} etiqueta="Calientes"
+               sub="listos para cerrar" tono="caliente"
+               proporcion={captados ? calientes / captados : 0} />
+          <Kpi orden={3} valor={entregados} etiqueta="Fichas al asesor"
+               sub={pct(entregados)} tono="ok"
+               proporcion={captados ? entregados / captados : 0} />
         </div>
 
-        {/* El mapa de cables sigue arriba: cuenta COMO fluye el sistema. El
-            tablero cuenta QUIEN esta en cada etapa, que es la pregunta que se
-            hace el operador cuando algo se atasca. */}
         <SystemMap leads={lista} />
 
         <Tablero

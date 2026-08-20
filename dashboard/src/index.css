@@ -1246,3 +1246,328 @@ body.tema-asesor .live-pill {
   .live-pill { flex: 0 0 auto; }
   .kpis { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ========================================================================== */
+/* CAPA DE PRODUCCION                                                         */
+/* Fondo ambiental, profundidad y coreografia de entrada. Todo con la paleta  */
+/* de marca: el brillo sale del azul y el amarillo Colsubsidio, no de un      */
+/* degradado generico de plantilla.                                           */
+/* ========================================================================== */
+
+/* --- Fondo: dos halos lentos + trama fina ---------------------------------
+   Se pinta en un pseudo-elemento fijo y no en el body para que no se repinte
+   con el scroll: la animacion vive en su propia capa y no toca el contenido. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(60rem 40rem at 12% -10%, rgba(0, 103, 177, 0.28), transparent 60%),
+    radial-gradient(48rem 34rem at 92% 8%, rgba(255, 208, 0, 0.10), transparent 62%),
+    radial-gradient(70rem 46rem at 50% 108%, rgba(63, 162, 224, 0.14), transparent 60%);
+  animation: respirar 22s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+/* Trama tecnica, muy tenue: da textura sin competir con el contenido. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(63, 162, 224, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(63, 162, 224, 0.045) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(80rem 60rem at 50% 0%, #000 20%, transparent 78%);
+  -webkit-mask-image: radial-gradient(80rem 60rem at 50% 0%, #000 20%, transparent 78%);
+  pointer-events: none;
+}
+@keyframes respirar {
+  from { transform: scale(1) translateY(0); opacity: 0.9; }
+  to   { transform: scale(1.06) translateY(-14px); opacity: 1; }
+}
+
+/* --- Barra superior: cristal y pegada ------------------------------------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  background: rgba(6, 25, 42, 0.72);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* --- Coreografia de entrada ------------------------------------------------
+   Las secciones aparecen escalonadas de arriba abajo, siguiendo el orden en
+   que se leen. Solo al cargar: despues, los cambios los animan sus propios
+   componentes (FLIP en el tablero, contadores en los KPI). */
+.kpis > *,
+.flujo-card,
+.tablero,
+.grid > * {
+  animation: subir 0.62s cubic-bezier(0.22, 0.9, 0.28, 1) both;
+  animation-delay: calc(var(--orden, 0) * 70ms + 60ms);
+}
+.flujo-card { --orden: 4; }
+.tablero    { --orden: 5; }
+.grid > *:first-child { --orden: 6; }
+.grid > *:last-child  { --orden: 7; }
+@keyframes subir {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* --- KPI ------------------------------------------------------------------ */
+.kpi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 18px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--line-soft);
+  background:
+    linear-gradient(180deg, rgba(16, 48, 73, 0.85), rgba(11, 36, 56, 0.85));
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.22, 0.9, 0.28, 1),
+              border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.kpi::before {
+  content: "";
+  position: absolute;
+  inset: -60% 45% auto -10%;
+  height: 140px;
+  background: radial-gradient(ellipse at center, var(--acento, rgba(63,162,224,0.3)), transparent 68%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.kpi[data-tono="caliente"] { --acento: rgba(255, 107, 82, 0.42); }
+.kpi[data-tono="ok"]       { --acento: rgba(47, 191, 120, 0.38); }
+.kpi:hover {
+  transform: translateY(-3px);
+  border-color: rgba(63, 162, 224, 0.5);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+}
+.kpi__num {
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.kpi[data-tono="caliente"] .kpi__num { color: var(--cal-caliente); }
+.kpi[data-tono="ok"] .kpi__num       { color: var(--st-completado); }
+.kpi__lbl { font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
+.kpi__sub { font-size: 11px; color: var(--text-faint); }
+.kpi__barra {
+  display: block;
+  height: 3px;
+  margin-top: 10px;
+  border-radius: 3px;
+  background: var(--linea-honda);
+  overflow: hidden;
+}
+.kpi__barra-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--cs-azul), var(--cs-azul-claro));
+  transition: width 1s cubic-bezier(0.22, 0.9, 0.28, 1);
+}
+.kpi[data-tono="caliente"] .kpi__barra-fill {
+  background: linear-gradient(90deg, #c9412c, var(--cal-caliente));
+}
+.kpi[data-tono="ok"] .kpi__barra-fill {
+  background: linear-gradient(90deg, #1d8a55, var(--st-completado));
+}
+
+/* --- El punto de "en vivo" late de verdad --------------------------------- */
+.live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  opacity: 0;
+  animation: onda 2.4s ease-out infinite;
+}
+@keyframes onda {
+  0%   { transform: scale(0.6); opacity: 0.65; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+  .kpis > *, .flujo-card, .tablero, .grid > * { animation: none; }
+  .live-dot::after { animation: none; }
+  .kpi:hover { transform: none; }
+}
+
+/* --- Registro como cronologia --------------------------------------------- */
+/* Antes era una lista de filas sueltas. Con el eje vertical se lee como lo que
+   es: una secuencia. El punto marca el hito y su color, el desenlace. */
+.log {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0;
+}
+.log::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 86px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--line-soft) 12%, var(--line-soft) 88%, transparent);
+}
+.log__row {
+  display: grid;
+  grid-template-columns: 76px 18px 1fr;
+  align-items: baseline;
+  gap: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(27, 64, 92, 0.35);
+  animation: subir 0.5s cubic-bezier(0.22, 0.9, 0.28, 1) both;
+  animation-delay: calc(var(--orden, 0) * 35ms);
+}
+.log__row:last-child { border-bottom: none; }
+.log__time {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding-right: 12px;
+  white-space: nowrap;   /* "hace 42 min" partia en dos y descuadraba la fila */
+}
+.log__dot {
+  position: relative;
+  justify-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cs-azul-claro);
+  box-shadow: 0 0 0 3px var(--bg-elev);
+  transform: translateY(-1px);
+}
+.log__row[data-tono="ok"] .log__dot    { background: var(--st-completado); }
+.log__row[data-tono="error"] .log__dot { background: var(--st-error); }
+/* El mas reciente late: es el unico que puede estar pasando ahora mismo. */
+.log__row:first-child .log__dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  color: inherit;
+  background: transparent;
+  animation: onda 2.4s ease-out infinite;
+}
+.log__text {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  padding-left: 10px;
+}
+.log__quien {
+  color: var(--text);
+  font-weight: 650;
+}
+.log__quien::after { content: " · "; color: var(--text-faint); font-weight: 400; }
+
+@media (max-width: 560px) {
+  .log::before { display: none; }
+  .log__row { grid-template-columns: 56px 14px 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .log__row { animation: none; }
+  .log__row:first-child .log__dot::after { animation: none; }
+}
+
+/* --- Plugins: el estado se ve, no solo se lee ----------------------------- */
+.plugin {
+  transition: transform 0.28s cubic-bezier(0.22, 0.9, 0.28, 1),
+              border-color 0.28s ease, background 0.28s ease;
+}
+.plugin:hover {
+  transform: translateX(3px);
+  border-color: rgba(63, 162, 224, 0.45);
+}
+/* El punto verde de "conectado" respira: un panel de integraciones que no se
+   mueve no distingue "esta bien" de "se congelo la pestaña". */
+.plugin__estado[data-ok="true"] .plugin__dot,
+.plugin [data-ok="true"] {
+  animation: pulso-suave 2.8s ease-in-out infinite;
+}
+@keyframes pulso-suave {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* --- Tarjetas: profundidad comun ------------------------------------------ */
+.card {
+  position: relative;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.card::after {
+  /* Filo superior iluminado: es lo que separa una tarjeta "plana" de una que
+     parece tener volumen, y cuesta un pseudo-elemento. */
+  content: "";
+  position: absolute;
+  inset: 0 12% auto 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(63, 162, 224, 0.4), transparent);
+  pointer-events: none;
+}
+.columna::after,
+.kpi::after {
+  content: "";
+  position: absolute;
+  inset: 0 18% auto 18%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(63, 162, 224, 0.35), transparent);
+  pointer-events: none;
+}
+
+/* --- Enfoque visible y consistente en todo lo pulsable -------------------- */
+.tarjeta:focus-visible,
+.columna__ver:focus-visible,
+.vista-switch__b:focus-visible,
+.kpi:focus-visible {
+  outline: 2px solid var(--cs-amarillo);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plugin:hover { transform: none; }
+  .plugin__estado[data-ok="true"] .plugin__dot,
+  .plugin [data-ok="true"] { animation: none; }
+}
+
+/* La ficha del asesor es tema CLARO: el fondo ambiental oscuro no aplica ahi.
+   Sin esto los halos azules se cuelan por debajo y ensucian el blanco. */
+body.tema-asesor::before,
+body.tema-asesor::after { display: none; }
+
+/* La barra de cristal es del tema OSCURO. En la ficha del asesor tiene que
+   aclararse tambien, o el titular queda gris sobre gris: se colo al hacer la
+   topbar pegajosa. */
+body.tema-asesor .topbar {
+  background: rgba(255, 255, 255, 0.86);
+  border-bottom-color: #dbe3ec;
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+}
+body.tema-asesor .live-pill {
+  background: #fff;
+  border-color: #cfd6e0;
+}
+body.tema-asesor .brand__mark {
+  box-shadow: 0 2px 10px rgba(0, 103, 177, 0.25);
+}
