@@ -122,14 +122,32 @@ function FilaLead({
 // --------------------------------------------------------------------------- //
 // Bloques del detalle
 // --------------------------------------------------------------------------- //
-// Las 4 dimensiones del score, con su tope. Suman 100 y el orden es el mismo
-// que usa el modelo (modelo_recomendaciones/recomendaciones.py).
-const DIMENSIONES = [
-  { clave: "entorno", etiqueta: "Entorno", tope: 50 },
-  { clave: "capacidad", etiqueta: "Capacidad", tope: 20 },
-  { clave: "asequibilidad", etiqueta: "Asequibilidad", tope: 18 },
-  { clave: "beneficio_caja", etiqueta: "Beneficio caja", tope: 12 },
+// Componentes del score del motor v2 (modelo_recomendaciones/motor/modelo.py).
+// Los valores ya vienen reescalados por el backend para sumar el match_score,
+// asi que cada tramo se dibuja a su ancho real.
+const DIMENSIONES_V2 = [
+  { clave: "perfil", etiqueta: "Perfil" },
+  { clave: "historial", etiqueta: "Historial" },
+  { clave: "zonas", etiqueta: "Amenidades" },
+  { clave: "localidad", etiqueta: "Localidad" },
 ] as const;
+
+// Motor v1, por reglas. Se conserva porque los leads capturados ANTES del
+// cambio de motor tienen este desglose guardado en Supabase: borrarlo dejaria
+// sus fichas con la barra vacia y sin explicacion del match.
+const DIMENSIONES_V1 = [
+  { clave: "entorno", etiqueta: "Entorno" },
+  { clave: "capacidad", etiqueta: "Capacidad" },
+  { clave: "asequibilidad", etiqueta: "Asequibilidad" },
+  { clave: "beneficio_caja", etiqueta: "Beneficio caja" },
+] as const;
+
+/** Elige el juego de dimensiones segun las claves que traiga la fila. */
+function dimensionesDe(d: Record<string, number | undefined>) {
+  return DIMENSIONES_V2.some((dim) => d[dim.clave] != null)
+    ? DIMENSIONES_V2
+    : DIMENSIONES_V1;
+}
 
 function BarraMatch({
   r,
@@ -146,7 +164,7 @@ function BarraMatch({
   // exactamente 100, cada tramo se dibuja a su ancho real y el asesor ve de
   // dónde sale el número: dos proyectos con el mismo 72 pueden tenerlo por
   // motivos opuestos, y eso cambia lo que le dice al cliente.
-  const segmentos = DIMENSIONES.map((dim) => ({
+  const segmentos = dimensionesDe(d).map((dim) => ({
     ...dim,
     valor: Math.max(0, Number(d[dim.clave] ?? 0)),
   }));
@@ -172,7 +190,7 @@ function BarraMatch({
         className="as-rec__barra"
         role="img"
         aria-label={`Coincidencia ${pct} de 100: ${segmentos
-          .map((x) => `${x.etiqueta} ${Math.round(x.valor)} de ${x.tope}`)
+          .map((x) => `${x.etiqueta} aporta ${Math.round(x.valor)} puntos`)
           .join(", ")}`}
       >
         {segmentos.map((x) => (
@@ -180,7 +198,7 @@ function BarraMatch({
             key={x.clave}
             className={`as-seg as-seg--${x.clave}`}
             style={{ width: `${x.valor}%` }}
-            title={`${x.etiqueta}: ${Math.round(x.valor)}/${x.tope}`}
+            title={`${x.etiqueta}: ${Math.round(x.valor)} puntos de ${pct}`}
           />
         ))}
       </div>
@@ -189,7 +207,7 @@ function BarraMatch({
         {segmentos.map((x) => (
           <span key={x.clave} className="as-leyenda">
             <i className={`as-seg as-seg--${x.clave}`} />
-            {x.etiqueta} <b>{Math.round(x.valor)}</b>/{x.tope}
+            {x.etiqueta} <b>{Math.round(x.valor)}</b>
           </span>
         ))}
       </div>

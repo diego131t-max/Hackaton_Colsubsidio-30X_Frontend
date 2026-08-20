@@ -66,6 +66,11 @@
       edad: parseInt(a.edad, 10),
       personas_a_cargo: a.personas === '4+' ? 4 : parseInt(a.personas || '0', 10),
       zona_interes: zonaInteres,
+      // El quiz ya lo captura ('3+' se guarda tal cual). Es filtro duro del
+      // modelo, asi que viajar sin el degrada la recomendacion en silencio.
+      numero_habitaciones: a.habitaciones
+        ? (a.habitaciones === '3+' ? 3 : parseInt(a.habitaciones, 10))
+        : null,
       piso_preferido: PISO_PREFERIDO[a.piso_preferido] || null,
       tipo_inmueble: a.tipo_inmueble || null,
       // Array de las etiquetas exactas del backend (los `v` de la pregunta

@@ -78,6 +78,10 @@ class SenalBowl(BaseModel):
     zona_interes: str
     # 1=bajo, 2=medio, 3=alto (ver PISO_PREFERIDO_LABELS). Tolera "bajo"/"medio"/
     # "alto"/"sin_preferencia" por compatibilidad con el front actual.
+    # Filtro DURO del modelo: es lo ultimo que la escalera de relajacion
+    # suelta. El formulario ya lo preguntaba (pregunta sexta del quiz) pero
+    # no lo enviaba; sin el, el modelo asume 2 alcobas para todo el mundo.
+    numero_habitaciones: Literal[1, 2, 3, 4] | None = None
     piso_preferido: Literal[1, 2, 3] | None = None
     tipo_inmueble: Literal["apartamento", "casa", "sin_preferencia"] | None = None
     # LISTA de amenidades (ver ENTORNO_DESEADO_OPCIONES). Acepta también un solo
