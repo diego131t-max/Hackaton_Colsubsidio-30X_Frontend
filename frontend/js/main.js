@@ -480,9 +480,29 @@
     // quiere). Las piezas ya puestas NO se destruyen — se reacomodan y cambian
     // de imagen, que es lo que hace que se lea como "el plano se ajusta a lo
     // que pediste" y no como un parpadeo.
+    // Mientras la bola esta derribando el plano anterior no se toca nada: la
+    // reconstruccion la hace `reconstruirPlano` al terminar, releyendo el
+    // estado de ese momento. Si el usuario contesta otra vez durante la
+    // demolicion, lo que se levanta es el plano que toca ENTONCES, no el que
+    // tocaba cuando empezo el derribo.
+    if (losa.dataset.demoliendo) return;
+    // Mientras se arma el plano nuevo, lo unico que puede interrumpir es otro
+    // CAMBIO de plano (que derriba y vuelve a empezar). El resto —altas y bajas
+    // de piezas— lo lleva el propio armado.
+    if (losa.dataset.construyendo && derived.planta &&
+        losa.dataset.sello === derived.planta.sello) return;
+
     if (derived.planta && losa.dataset.sello !== derived.planta.sello) {
-      reacomodarPlano(losa, derived);
-    } else if (derived.planta && derived.planta.ajustada) {
+      // Solo se salta el derribo si no hay NADA que romper (losa vacia).
+      if (losa.querySelectorAll('.gdf-room').length < MIN_PIEZAS_DERRIBO) {
+        reconstruirPlano(losa);
+        return;
+      }
+      golpeDeBola(losa);
+      demolerYReconstruir(losa);
+      return;
+    }
+    if (derived.planta && derived.planta.ajustada) {
       // Se contestó lo de las alcobas y el plano provisional YA las tenía, así
       // que no hay nada que reacomodar. Se anima igual: si no, la misma
       // respuesta unas veces mueve el plano y otras no hace nada, y se lee
@@ -552,30 +572,505 @@
    * pintada encuentra su equivalente en el plano nuevo, se desplaza a su sitio
    * con la transición CSS y cruza a la imagen nueva.
    */
-  function reacomodarPlano(losa, derived) {
-    var planta = derived.planta;
-    losa.dataset.sello = planta.sello;
-    losa.style.setProperty('--ratio', planta.ratio);
-    losa.style.setProperty('--wmax', planta.wmax + 'px');
+  /**
+   * La bola entra, golpea y se va. Solo el gesto: quien de verdad recoloca las
+   * piezas es `demolerYReconstruir`, que se llama justo después: marca las
+   * piezas para que se rompan y programa el levantamiento del plano nuevo.
+   *
+   * `.esperando-golpe` sincroniza el momento — la losa acusa el impacto justo
+   * cuando la bola llega, no antes.
+   */
+  var golpeTimer = null;
+  function golpeDeBola(losa) {
+    var bola = root.querySelector('.gdf-bola');
+    var escena = losa.closest('.gdf-scene');
+    if (!bola) return;
 
-    var silueta = losa.querySelector('.gdf-silueta');
-    if (silueta) silueta.outerHTML = window.GDF.templates.siluetaHtml(derived.huecos, derived.rooms);
+    clearTimeout(golpeTimer);
+    bola.classList.remove('golpea');
+    if (escena) escena.classList.remove('esperando-golpe');
+    // Forzar reflow: sin esto, quitar y volver a poner la clase en el mismo
+    // frame no reinicia la animación y la bola no se movería si el plano
+    // cambia dos preguntas seguidas.
+    void bola.offsetWidth;
+    bola.classList.add('golpea');
+    if (escena) escena.classList.add('esperando-golpe');
 
-    var porId = {};
-    derived.rooms.forEach(function (r) { porId[r.id] = r; });
+    golpeTimer = setTimeout(function () {
+      bola.classList.remove('golpea');
+      if (escena) escena.classList.remove('esperando-golpe');
+    }, 1100);
+  }
 
-    var pintadas = losa.querySelectorAll('.gdf-room');
-    for (var i = 0; i < pintadas.length; i++) {
-      var el = pintadas[i];
-      var room = porId[el.dataset.room];
-      // Las que ya no tocan las retira el bucle de sobrantes de updatePlantaDOM.
-      if (!room) continue;
-      el.classList.remove('animated');
-      el.style.cssText = room.styleText;
-      var lienzo = el.querySelector('.lienzo');
-      if (lienzo) lienzo.style.cssText = room.lienzoStyle;
-      marcarReacomodo(el);
+  // Cuanto tarda el derribo desde que se pulsa. Es la SUMA de lo que dice el
+  // CSS de `.gdf-room.demolida`, no un numero a ojo:
+  //   340 ms  el impacto de la bola (ver bolaGolpe)
+  // + 220 ms  la onda expansiva: lo que tarda en llegar a la pieza mas lejana
+  //           del punto de impacto (MS_ONDA)
+  // + 780 ms  la caida del pedazo
+  //   = 1340 -> 1360
+  // Si se toca cualquiera de los tres en el CSS hay que rehacer esta cuenta, o
+  // el plano nuevo se levanta encima de pedazos que todavia estan cayendo.
+  var MS_DEMOLICION = 1360;
+  // Lo que tarda la rotura en propagarse del punto de impacto a la esquina mas
+  // lejana. Es lo que hace que se lea como un GOLPE y no como un desvanecido
+  // programado: las piezas de al lado de la bola revientan primero.
+  var MS_ONDA = 220;
+  // A media caida se vuelven a encender los huecos grises: el apartamento se
+  // queda en su huella mientras se derrumba, en vez de dejar un vacio. No se
+  // pueden encender antes — las piezas van en `mix-blend-mode: multiply` y se
+  // multiplicarian contra el gris, entintando el plano entero (el mismo motivo
+  // por el que existe `apagarHueco`). A 560 ms ya estan por debajo del 20 % de
+  // opacidad y no tinen nada.
+  var MS_HUELLA = 560;
+  // El derribo se aplica en TODOS los cambios de plano. El umbral es 1 porque
+  // lo unico que no tiene sentido es romper cuando no hay NADA pintado (el
+  // cambio que cae en la primera respuesta, con la losa aun vacia): ahi la bola
+  // golpearia el aire.
+  //
+  // Estuvo en 5 y era demasiado: medido sobre 4 quices, 7 de los 11 cambios de
+  // plano se quedaban sin animacion, o sea el 64 %. La sensacion era que el
+  // derribo aparecia de vez en cuando y sin motivo aparente.
+  var MIN_PIEZAS_DERRIBO = 1;
+
+  // En cuantos pedazos se rompe cada celda. En pantallas estrechas se baja: son
+  // nodos con imagen, `multiply`, `clip-path` y transform animandose a la vez, y
+  // 12 celdas x 8 son 96 a la vez.
+  //
+  // OJO CON EL TOPE: si se queda por debajo de `celdas * ESQUIRLAS_ANCHO`, el
+  // reparto de mas abajo BAJA los pedazos por celda en silencio y el derribo se
+  // ve mas pobre de lo que dice la constante. Con 8 en escritorio el tope tiene
+  // que ser 96 o mayor.
+  var ESQUIRLAS_ANCHO = 8;
+  var ESQUIRLAS_ESTRECHO = 3;
+  var TOPE_ESQUIRLAS = 96;
+
+  var demolicionTimer = null;
+  var huellaTimer = null;
+  var construccionTimers = [];
+
+  /**
+   * El plano cambio: se DERRIBA el anterior y se levanta el nuevo.
+   *
+   * Antes esto deslizaba cada pieza a su sitio en el plano nuevo
+   * (`reacomodarPlano`, ya borrado). Se cambio a peticion: lo que tiene que
+   * leerse es que la bola DESTRUYE lo que ya no encaja y el apartamento se
+   * vuelve a levantar, no que los muebles se deslizan solos.
+   *
+   * OJO: derribar es la TRANSICION, no una resta. El numero de piezas al
+   * terminar nunca es menor que antes — lo garantiza el suelo de
+   * `scene.celdasVisibles`. Se destruye y se reconstruye igual o mas.
+   */
+  /**
+   * Donde golpea la bola, en coordenadas de la escena.
+   *
+   * Se calcula, no se mide: la bola esta a mitad de su animacion cuando esto
+   * corre, asi que su rect no sirve. El gancho esta en (26,26), el cable mide
+   * `min(52% del alto, 320px)` y el fotograma del impacto es rotate(-40deg)
+   * — los mismos numeros que el CSS de .gdf-bola. Si alli cambian, aqui
+   * tambien.
+   */
+  function puntoDeImpacto(escena) {
+    // ESTOS NUMEROS SON UNA COPIA DEL CSS. Van a mano porque cuando esto corre
+    // la bola esta a mitad de su animacion y su rect no sirve de nada. Si en
+    // `.gdf-bola` cambian `left`, `top` o `--largo`, o si cambia el angulo del
+    // fotograma del impacto en `bolaGolpe`, hay que cambiarlos aqui tambien o
+    // el polvo y la onda expansiva salen del sitio equivocado.
+    //
+    //   pivote  left: 45%   top: -14cqh   (cqh = 1% del alto de la escena)
+    //   cable   min(70cqh, 560px)
+    //   impacto rotate(-8deg)
+    var px = escena.clientWidth * 0.45;
+    var py = escena.clientHeight * -0.14;
+    var largo = Math.min(escena.clientHeight * 0.7, 560);
+    // Formula con SIGNO: en CSS, con el cable apuntando a +Y, una rotacion
+    // positiva manda la bola a la IZQUIERDA (x' = -L*sin0). El angulo del
+    // impacto es negativo, asi que la bola cae a la derecha del pivote.
+    var rad = (-8 * Math.PI) / 180;
+    return { x: px - Math.sin(rad) * largo, y: py + Math.cos(rad) * largo };
+  }
+
+  // Ruido determinista por pieza: mismo id -> mismo cascote, siempre. Sin esto
+  // habria que usar Math.random() y el derribo no seria reproducible, que es
+  // justo lo que hace imposible verificarlo.
+  function jitter(id, sal) {
+    var h = 2166136261;
+    var s = String(id) + '|' + sal;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
     }
+    return (h % 1000) / 1000; // 0..1
+  }
+
+  /**
+   * Trocea una celda en pedazos irregulares que TESELAN su rectangulo.
+   *
+   * Se toma un centro desplazado y un punto intermedio jitterado en cada lado;
+   * de ahi salen cuatro cuadrilateros que cubren la celda entera sin huecos ni
+   * solapes — el patron de un cristal agrietado. Con 2 pedazos se parte por la
+   * diagonal jitterada.
+   *
+   * Los polignos se CRECEN un pelo desde su centro: en el borde compartido las
+   * dos esquirlas pintan cobertura parcial y, con `multiply`, eso sale mas
+   * oscuro que una pasada entera — se veia la cuadricula de cortes en el primer
+   * fotograma. Es el mismo problema que la SANGRIA de geometriaCeldas, y la
+   * misma solucion: solapar.
+   */
+  // Las esquirlas se SOLAPAN un pelo para tapar el antialiasing del corte. Ojo:
+  // esto solo es seguro porque van dentro de `.gdf-cascotes`, que aisla la
+  // mezcla. Con el `multiply` en cada esquirla, solapar multiplicaba dos veces
+  // esa banda y la costura salia MAS oscura — mas solape, peor.
+  var CRECE = 1.2;
+
+  function poligono(pts) {
+    // Centro del pedazo, para crecerlo hacia afuera desde ahi.
+    var cx = 0, cy = 0;
+    pts.forEach(function (q) { cx += q[0]; cy += q[1]; });
+    cx /= pts.length;
+    cy /= pts.length;
+    return 'polygon(' + pts.map(function (q) {
+      var vx = q[0] - cx, vy = q[1] - cy;
+      var m = Math.sqrt(vx * vx + vy * vy) || 1;
+      return (q[0] + (vx / m) * CRECE).toFixed(2) + '% ' + (q[1] + (vy / m) * CRECE).toFixed(2) + '%';
+    }).join(', ') + ')';
+  }
+
+  function trocear(id, n) {
+    var j = function (s) { return jitter(id, s); };
+    if (n <= 2) {
+      // Diagonal jitterada: dos mitades.
+      var a = 30 + j('d1') * 40;
+      var b = 30 + j('d2') * 40;
+      return [
+        poligono([[0, 0], [a, 0], [b, 100], [0, 100]]),
+        poligono([[a, 0], [100, 0], [100, 100], [b, 100]]),
+      ];
+    }
+
+    // Centro desplazado + un punto jitterado en cada arista: cuatro
+    // cuadrilateros que TESELAN la celda entera. El patron de un cristal
+    // agrietado.
+    var cx = 50 + (j('cx') - 0.5) * 36;
+    var cy = 50 + (j('cy') - 0.5) * 36;
+    var tx = 30 + j('t') * 40;
+    var ry = 30 + j('r2') * 40;
+    var bx = 30 + j('b') * 40;
+    var ly = 30 + j('l') * 40;
+    var cuatro = [
+      [[0, 0], [tx, 0], [cx, cy], [0, ly]],
+      [[tx, 0], [100, 0], [100, ry], [cx, cy]],
+      [[cx, cy], [100, ry], [100, 100], [bx, 100]],
+      [[0, ly], [cx, cy], [bx, 100], [0, 100]],
+    ];
+    // Con 3 hay que FUSIONAR dos cuadrilateros contiguos, no devolver cuatro:
+    // comparten la arista [tx,0]-[cx,cy], asi que su union sigue teselando la
+    // celda exacta. Antes el 3 caia en la rama del 4 y se pedian 3 pedazos pero
+    // salian 4 — en movil eso era un tercio mas de nodos de los previstos.
+    if (n === 3) {
+      return [
+        poligono([[0, 0], [100, 0], [100, ry], [cx, cy], [0, ly]]),
+        poligono(cuatro[2]),
+        poligono(cuatro[3]),
+      ];
+    }
+    if (n <= 4) return cuatro.map(poligono);
+
+    // Para 5 o 6 se parten en dos los cuadrilateros mas grandes, por una
+    // diagonal jitterada. Mas pedazos = se lee mas como algo que revienta,
+    // pero hay que seguir teselando: por eso se PARTE uno existente en vez de
+    // inventar geometria nueva.
+    var area = function (q) {
+      var s = 0;
+      for (var i = 0; i < q.length; i++) {
+        var a2 = q[i], b2 = q[(i + 1) % q.length];
+        s += a2[0] * b2[1] - b2[0] * a2[1];
+      }
+      return Math.abs(s) / 2;
+    };
+    var orden = cuatro.slice().sort(function (a2, b2) { return area(b2) - area(a2); });
+    var extra = n - 4;
+    var salida = [];
+    cuatro.forEach(function (q, k) {
+      var idx = orden.indexOf(q);
+      if (idx >= extra) {
+        salida.push(poligono(q));
+        return;
+      }
+      // Corte por la diagonal entre dos vertices opuestos, movida un poco.
+      var f = 0.35 + j('p' + k) * 0.3;
+      var m1 = [q[0][0] + (q[1][0] - q[0][0]) * f, q[0][1] + (q[1][1] - q[0][1]) * f];
+      var m2 = [q[2][0] + (q[3][0] - q[2][0]) * f, q[2][1] + (q[3][1] - q[2][1]) * f];
+      salida.push(poligono([q[0], m1, m2, q[3]]));
+      salida.push(poligono([m1, q[1], q[2], m2]));
+    });
+    return salida;
+  }
+
+  /**
+   * Sustituye una celda por sus esquirlas. Cada una es un CLON del room con un
+   * `clip-path` distinto: hereda su posicion y su `.lienzo` tal cual, asi que no
+   * hay que recalcular ni un offset de la imagen.
+   *
+   * Comprobado que `clip-path` NO rompe el `mix-blend-mode: multiply` — que era
+   * el riesgo de todo esto, porque si lo rompiera volveria a verse el papel
+   * blanco del plano (ver la seccion de templates.js en CLAUDE.md).
+   */
+  function esquirlasDe(room, n, bolsa) {
+    var out = [];
+    trocear(room.dataset.room, n).forEach(function (poly, k) {
+      var c = room.cloneNode(true);
+      c.classList.remove('animated', 'reacomodo');
+      c.classList.add('esquirla');
+      c.dataset.esquirla = k;
+      c.style.clipPath = poly;
+      c.style.webkitClipPath = poly;
+      bolsa.appendChild(c);
+      out.push(c);
+    });
+    room.remove();
+    return out;
+  }
+
+  /**
+   * La bolsa donde vuelan los cascotes.
+   *
+   * Existe por el `mix-blend-mode: multiply`. Si cada esquirla se mezclara por
+   * su cuenta, las bandas donde dos se solapan se multiplicarian DOS veces y
+   * saldria una costura oscura marcando cada corte. Metiendolas en un
+   * contenedor con `isolation: isolate` + `multiply`, entre ellas componen
+   * normal y el grupo entero se multiplica UNA vez contra la losa — que es lo
+   * que sigue haciendo desaparecer el papel blanco del plano.
+   *
+   * Va con `inset: 0`, asi que es del tamano de la losa y los % de posicion de
+   * las esquirlas siguen resolviendo igual.
+   */
+  function bolsaDeCascotes(losa) {
+    var vieja = losa.querySelector('.gdf-cascotes');
+    if (vieja) vieja.remove();
+    var bolsa = document.createElement('div');
+    bolsa.className = 'gdf-cascotes';
+    losa.appendChild(bolsa);
+    return bolsa;
+  }
+
+  function demolerYReconstruir(losa) {
+    // Un armado a medias se cancela: sus temporizadores meterian piezas del
+    // plano viejo encima del derribo.
+    construccionTimers.forEach(clearTimeout);
+    construccionTimers = [];
+    delete losa.dataset.construyendo;
+
+    losa.dataset.demoliendo = '1';
+    var escena = losa.closest('.gdf-scene');
+    var piezas = [].slice.call(losa.querySelectorAll('.gdf-room'));
+    var ids = piezas.map(function (el) { return el.dataset.room; });
+
+    var cajaLosa = losa.getBoundingClientRect();
+    var cajaEsc = escena ? escena.getBoundingClientRect() : cajaLosa;
+    var golpe = escena ? puntoDeImpacto(escena) : { x: 0, y: 0 };
+    // El impacto, pasado a coordenadas de la losa.
+    var gx = cajaEsc.left + golpe.x - cajaLosa.left;
+    var gy = cajaEsc.top + golpe.y - cajaLosa.top;
+    var diagonal = Math.sqrt(cajaLosa.width * cajaLosa.width + cajaLosa.height * cajaLosa.height) || 1;
+
+    polvoDeImpacto(escena, golpe);
+
+    // En cuantos pedazos se rompe cada celda. En pantallas estrechas menos, y
+    // con un tope global: son nodos con imagen, `multiply`, `clip-path` y
+    // transform animandose a la vez.
+    var estrecha = escena && escena.clientWidth < 520;
+    var porCelda = estrecha ? ESQUIRLAS_ESTRECHO : ESQUIRLAS_ANCHO;
+    if (piezas.length * porCelda > TOPE_ESQUIRLAS) {
+      porCelda = Math.max(2, Math.floor(TOPE_ESQUIRLAS / piezas.length));
+    }
+
+    // Primero se trocean todas y luego se anima: si se hiciera pieza a pieza,
+    // cada `remove()` invalidaria los rects de las siguientes.
+    var bolsa = bolsaDeCascotes(losa);
+    var cascotes = [];
+    piezas.forEach(function (el) {
+      cascotes = cascotes.concat(esquirlasDe(el, porCelda, bolsa));
+    });
+
+    cascotes.forEach(function (el) {
+      var sal = el.dataset.room + '#' + el.dataset.esquirla;
+
+      // Vector del impacto a la ESQUIRLA (no a la celda): es lo que hace que
+      // dos pedazos de la misma celda salgan en direcciones distintas, o sea
+      // que la celda se rompa en vez de moverse en bloque.
+      var r = el.getBoundingClientRect();
+      var cx = r.left + r.width / 2 - cajaLosa.left;
+      var cy = r.top + r.height / 2 - cajaLosa.top;
+      var dx = cx - gx;
+      var dy = cy - gy;
+      var d = Math.sqrt(dx * dx + dy * dy) || 1;
+      var cerca = Math.min(1, d / diagonal); // 0 = pegada al golpe
+
+      // La onda tarda en llegar: ese retardo ES el efecto de golpe.
+      el.style.setProperty('--retardo', (cerca * (MS_ONDA / 1000)).toFixed(3) + 's');
+
+      // Sale en la direccion del golpe, con un empujon extra si estaba cerca.
+      var fuerza = 110 + (1 - cerca) * 150;
+      var jx = (jitter(sal, 'x') - 0.5) * 90;
+      var jy = jitter(sal, 'y') * 110;
+      el.style.setProperty('--dx', Math.round((dx / d) * fuerza + jx) + 'px');
+      // Siempre acaba cayendo: la gravedad manda por encima de la direccion.
+      el.style.setProperty('--dy', Math.round((dy / d) * fuerza * 0.45 + 190 + jy) + 'px');
+      // El SENTIDO del giro es propio del pedazo, no del lado hacia el que sale
+      // despedido: atarlo a `dx` hacia que todos los del mismo lado del golpe
+      // voltearan igual y el derrumbe se leyera como un bloque moviendose.
+      // Volar es radial; voltear, no.
+      var giro = jitter(sal, 'rs') < 0.5 ? -1 : 1;
+      el.style.setProperty('--rot', Math.round(giro * (40 + jitter(sal, 'r') * 110)) + 'deg');
+      el.style.setProperty('--esc', (0.3 + jitter(sal, 's') * 0.25).toFixed(2));
+
+      el.classList.add('demolida');
+    });
+
+    clearTimeout(huellaTimer);
+    huellaTimer = setTimeout(function () {
+      ids.forEach(function (id) { apagarHueco(losa, id, false); });
+    }, MS_HUELLA);
+
+    clearTimeout(demolicionTimer);
+    demolicionTimer = setTimeout(function () {
+      delete losa.dataset.demoliendo;
+      reconstruirPlano(losa);
+    }, MS_DEMOLICION);
+  }
+
+  /**
+   * La nube de polvo del impacto. Va en la ESCENA, no en la losa: la losa tiene
+   * `overflow:hidden` y se la comeria, y ademas sus hijos van en
+   * `mix-blend-mode: multiply`, que tenirian el polvo.
+   *
+   * Se crea y se destruye sola. Es decoracion pura: si no llega a pintarse, el
+   * derribo funciona igual.
+   */
+  function polvoDeImpacto(escena, golpe) {
+    if (!escena) return;
+    var vieja = escena.querySelector('.gdf-polvo');
+    if (vieja) vieja.remove();
+
+    var nube = document.createElement('div');
+    nube.className = 'gdf-polvo';
+    nube.style.left = golpe.x + 'px';
+    nube.style.top = golpe.y + 'px';
+    // Tres bocanadas con tamanos y retardos distintos, para que no se lea como
+    // un solo circulo creciendo.
+    nube.innerHTML =
+      '<i style="--t:1.5;--rx:0px;--ry:0px"></i>' +
+      '<i style="--t:1.05;--rx:-46px;--ry:14px"></i>' +
+      '<i style="--t:0.9;--rx:42px;--ry:-12px"></i>' +
+      '<i style="--t:0.75;--rx:-18px;--ry:-34px"></i>' +
+      '<i style="--t:0.7;--rx:26px;--ry:34px"></i>';
+    escena.appendChild(nube);
+    setTimeout(function () {
+      if (nube.parentNode) nube.parentNode.removeChild(nube);
+    }, 1000);
+  }
+
+  // Cuanto se espera entre pieza y pieza al levantar el plano nuevo. Con 0.06 s
+  // las 12 caian en 0.7 s y se leia como que aparecian todas de golpe; con 0.13
+  // el armado dura 1.6 s y se ve pieza por pieza.
+  var MS_ENTRE_PIEZAS = 130;
+  // Lo que tarda una pieza en ARMARSE desde sus pedazos. Tiene que cuadrar con
+  // `roomEnsambla` en el CSS.
+  var MS_ENSAMBLA = 700;
+  // En cuantos pedazos llega cada pieza. Menos que al romperse: al construir
+  // solo hay una pieza armandose a la vez, pero el gesto tiene que leerse sin
+  // llenar la escena de nodos.
+  var ESQUIRLAS_ENSAMBLA = 6;
+
+  /**
+   * Una pieza del plano nuevo llega EN PEDAZOS y se arma sola.
+   *
+   * Es el gesto inverso del derribo, y por eso usa la misma maquinaria:
+   * `trocear` + `esquirlasDe`. Los pedazos aparecen dispersos —cada uno con su
+   * `--dx/--dy/--rot` de PARTIDA, no de llegada— y convergen a su sitio. Al
+   * terminar se retiran y entra la pieza entera: mantener 12 celdas x 4
+   * pedazos vivos el resto del quiz seria tirar nodos a la basura, y ademas el
+   * derribo siguiente tiene que poder trocear una pieza, no un puzzle ya roto.
+   */
+  function ensamblarPieza(losa, room, estrecha) {
+    var bolsa = losa.querySelector('.gdf-cascotes') || bolsaDeCascotes(losa);
+
+    // Pieza de partida solo para clonarla en pedazos; `esquirlasDe` la retira.
+    var tmp = document.createElement('div');
+    tmp.innerHTML = window.GDF.templates.cuartoHtml(room, false);
+    var base = tmp.firstElementChild;
+    bolsa.appendChild(base);
+
+    var trozos = esquirlasDe(base, estrecha ? 2 : ESQUIRLAS_ENSAMBLA, bolsa);
+    trozos.forEach(function (el, k) {
+      var sal = room.id + '@' + k;
+      // De donde VIENE cada pedazo: repartidos alrededor, no todos del mismo
+      // sitio, para que se lea como que se juntan.
+      var ang = (k / trozos.length) * Math.PI * 2 + jitter(sal, 'a') * 1.4;
+      var dist = 90 + jitter(sal, 'd') * 70;
+      el.style.setProperty('--dx', Math.round(Math.cos(ang) * dist) + 'px');
+      el.style.setProperty('--dy', Math.round(Math.sin(ang) * dist - 60) + 'px');
+      el.style.setProperty('--rot', Math.round((jitter(sal, 'r') - 0.5) * 90) + 'deg');
+      el.classList.add('ensamblando');
+    });
+
+    construccionTimers.push(setTimeout(function () {
+      trozos.forEach(function (el) { el.remove(); });
+      if (!losa.isConnected) return;
+      // Si la pieza ya esta puesta no se duplica. Puede pasar si algo repinto
+      // la escena mientras esta se armaba.
+      if (!losa.querySelector('.gdf-room[data-room="' + room.id + '"]:not(.esquirla)')) {
+        losa.insertAdjacentHTML('beforeend', window.GDF.templates.cuartoHtml(room, false));
+      }
+      apagarHueco(losa, room.id, true);
+    }, MS_ENSAMBLA));
+  }
+
+  /**
+   * Levanta el plano nuevo de cero, UNA PIEZA A LA VEZ y cada una armandose
+   * desde sus pedazos.
+   *
+   * Relee el estado AHORA (no el `derived` de cuando empezo el derribo) para
+   * que contestar durante la animacion no levante un plano ya caducado.
+   *
+   * OJO CON LA SILUETA: `siluetaHtml(huecos, rooms)` apaga de golpe el hueco
+   * gris de TODAS las piezas del plano nuevo. Con las piezas llegando
+   * escalonadas eso dejaba, durante mas de un segundo, celdas sin hueco y sin
+   * pieza — o sea agujeros. Por eso aqui la silueta se pinta ENTERA (sin
+   * `rooms`) y cada hueco se apaga cuando SU pieza acaba de armarse.
+   */
+  function reconstruirPlano(losa) {
+    var derived = window.GDF.state.computeDerived(state);
+    if (!derived.planta || !losa.isConnected) return;
+
+    construccionTimers.forEach(clearTimeout);
+    construccionTimers = [];
+
+    losa.dataset.sello = derived.planta.sello;
+    losa.style.setProperty('--ratio', derived.planta.ratio);
+    losa.style.setProperty('--wmax', derived.planta.wmax + 'px');
+
+    var escena = losa.closest('.gdf-scene');
+    var estrecha = !!(escena && escena.clientWidth < 520);
+
+    // Solo la silueta: las piezas entran despues, cada una a su hora.
+    losa.innerHTML = window.GDF.templates.siluetaHtml(derived.huecos, []);
+
+    // Mientras dura el armado, `updatePlantaDOM` no puede meter piezas por su
+    // cuenta: veria la losa medio vacia, insertaria las que faltan y luego el
+    // temporizador del armado insertaria LAS MISMAS otra vez. Se vieron 16
+    // piezas en un plano de 12.
+    losa.dataset.construyendo = '1';
+
+    derived.rooms.forEach(function (room, i) {
+      construccionTimers.push(setTimeout(function () {
+        if (losa.isConnected) ensamblarPieza(losa, room, estrecha);
+      }, i * MS_ENTRE_PIEZAS));
+    });
+    construccionTimers.push(setTimeout(function () {
+      delete losa.dataset.construyendo;
+    }, (derived.rooms.length - 1) * MS_ENTRE_PIEZAS + MS_ENSAMBLA + 40));
   }
 
   // La clase se quita al terminar para que la animación pueda volver a

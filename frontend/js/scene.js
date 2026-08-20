@@ -25,7 +25,20 @@
     });
     if (respondidas <= 0) return 0;
     var i = Math.min(respondidas, planta.vis.length) - 1;
-    return planta.vis[i] || 0;
+    var n = planta.vis[i] || 0;
+
+    // SUELO DE PIEZAS. Cada plano trae su propio reparto `vis[]`, monótono
+    // dentro de sí mismo pero NO entre planos distintos: al cambiar de uno de
+    // 12 celdas a uno de 9, el conteo bajaba y el usuario veía menos
+    // apartamento después de contestar. `minimo` lo guarda state.js al
+    // cambiar de plano (ver ajustarPlanta) y aquí impide que baje.
+    //
+    // `minimoDesde` es la pregunta en la que se puso ese suelo: por debajo de
+    // ella no aplica, y por eso `goBack` sigue restando piezas como siempre.
+    if (planta.minimo && respondidas >= (planta.minimoDesde || 0)) {
+      n = Math.max(n, Math.min(planta.minimo, (planta.celdas || []).length));
+    }
+    return n;
   }
 
   /** Las piezas reveladas, en orden. */

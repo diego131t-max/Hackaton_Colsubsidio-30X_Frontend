@@ -70,10 +70,14 @@
       simulador: null, // null | { proyecto: nombre, tipologia: idx, paso: 1|2 }
 
       // El apartamento REAL que arma el quiz: qué plano oficial se está
-      // montando y la geometría de sus piezas. Lo elige js/planta.js al
-      // empezar (elegirApartamento) y NO cambia durante la partida: es un
-      // ejemplo para enseñar cómo se construye una vivienda, no la
-      // recomendación —esa la calcula matching.js al final.
+      // montando y la geometría de sus piezas. Arranca con elegirApartamento
+      // (sorteo estable por nombre) y se REELIGE con cada respuesta vía
+      // ajustarPlanta -> planta.mejorApartamento.
+      //
+      // Converge hacia lo CONTESTADO, no hacia el proyecto ganador: sigue
+      // siendo un ejemplo para enseñar cómo se construye una vivienda, no la
+      // recomendación —esa la calcula matching.js al final y suele ser otro
+      // proyecto, porque solo 8 de los 31 tienen plano utilizable.
       //
       // No es un valor derivado a propósito: el parcheo de DOM de main.js
       // necesita comparar lo que hay pintado contra lo que toca ahora.
@@ -99,13 +103,20 @@
     });
     var answered = answeredQs.length;
     // Ya no es un número fijo con excepciones: todas las preguntas se hacen
-    // siempre (tipo, ingresos, personas, edad, zona/localidad, habitaciones,
-    // piso_preferido, entorno_deseado), así que el total es la lista misma.
+    // siempre (tipo, ingresos, personas, habitaciones, zona/localidad,
+    // piso_preferido, entorno_deseado, edad), así que el total es la lista
+    // misma. Ese orden lo fija data.js y no es arbitrario: la última tiene que
+    // ser la que menos mueva la recomendación, porque al contestarla se salta
+    // a resultados.
     var stepTotal = qList.length;
 
     var nHab = state.answers.habitaciones === '3+' ? 3 : parseInt(state.answers.habitaciones || '2', 10);
     var nPers = state.answers.personas === '4+' ? 4 : parseInt(state.answers.personas || '0', 10);
-    var compat = Math.min(97, Math.round(42 + (answered / stepTotal) * 55));
+    // El encaje con el catalogo, EN VIVO y de verdad: sale del mismo motor
+    // que decide las recomendaciones (ver compatDe en matching.js). Antes
+    // era `42 + (answered/stepTotal)*55`, o sea el progreso del quiz
+    // disfrazado de match: subia igual contestaras lo que contestaras.
+    var compat = window.GDF.matching.compatDe(state.answers);
 
     // El plano REAL que se está armando (ver js/planta.js); aquí solo se
     // decide cuántas de sus piezas se ven ya. La silueta y la losa existen
@@ -113,7 +124,8 @@
     var planta = state.planta;
     var showLote = !planta;
     var losaRevealed = !!planta;
-    var rooms = scene.buildRooms(planta, scene.celdasVisibles(state.answers, qList, planta));
+    var visibles = scene.celdasVisibles(state.answers, qList, planta);
+    var rooms = scene.buildRooms(planta, visibles);
     var huecos = scene.buildHuecos(planta);
 
     var a = state.answers;
@@ -144,38 +156,41 @@
   }
 
   /**
-   * Cambia el plano por uno con las alcobas que el usuario acaba de pedir, si
-   * el que estaba puesto no las tiene.
+   * Reelige el plano segun TODO lo contestado hasta ahora.
    *
-   * `ajustada` queda en true SIEMPRE que se conteste esta pregunta, cambie el
-   * plano o no, y main.js lo lee para animar el ajuste. Es a propósito: el
-   * plano provisional a veces ya tenía las alcobas pedidas —con 25 planos en
-   * el sorteo pasa aproximadamente 1 de cada 8 veces— y entonces contestar no
-   * producía ninguna reacción visible, así que la misma acción unas veces
-   * movía el plano y otras no. Lo que la animación comunica es "tu plano
-   * quedó ajustado a lo que pediste", y eso es cierto en los dos casos.
+   * Se llama en CADA respuesta, no solo en la de alcobas. `mejorApartamento`
+   * (planta.js) devuelve null cuando el que ya esta puesto sigue siendo el
+   * mejor, o cuando el candidato no gana por el margen minimo — asi el plano
+   * no salta de un lado a otro entre preguntas contiguas.
    *
-   * La pregunta de alcobas va de sexta (ver js/data.js), así que para cuando
-   * se contesta suele haber varias piezas ya pintadas del apartamento
-   * provisional. `reacomodarPlano` (main.js) las desplaza a su sitio en el
-   * plano nuevo y cruza a la imagen nueva, en vez de destruirlas y volver a
-   * empezar.
+   * `ajustada` queda en true SIEMPRE que se conteste, cambie el plano o no, y
+   * main.js lo lee para animar. Es a proposito: si la misma accion unas veces
+   * mueve el plano y otras no hace nada, se lee como que la app se colgo. Lo
+   * que la animacion comunica es "tu plano quedo ajustado a lo que pediste", y
+   * eso es cierto en los dos casos.
+   *
+   * EL SUELO DE PIEZAS (`minimo`/`minimoDesde`) es lo que impide que el
+   * apartamento ENCOJA al cambiar de plano. Cada plano trae su propio reparto
+   * `vis[]`, monotono dentro de si mismo pero no entre planos distintos: pasar
+   * de uno de 12 celdas a uno de 9 restaba piezas y el usuario veia MENOS
+   * apartamento despues de contestar. Con el suelo, la bola reordena y nunca
+   * resta. Se guarda desde que pregunta aplica para que `goBack` siga restando
+   * como siempre.
    */
-  function ajustarPlantaAHabitaciones(state) {
-    var pedidas = window.GDF.matching.habitacionesPedidas(state.answers);
+  function ajustarPlanta(state, respondidas, visiblesAntes) {
     var actual = state.planta;
-    if (actual && actual.habitaciones === pedidas) {
-      actual.ajustada = true;
-      return;
-    }
-    var nueva = window.GDF.planta.elegirApartamento(state, pedidas);
-    // Si no hubo con qué reemplazarlo, se queda el que estaba: mejor un plano
-    // que no cuadra que una escena vacía a mitad del quiz.
+    var nueva = window.GDF.planta.mejorApartamento(state);
     if (!nueva) {
+      // El que esta puesto sigue siendo el mejor: no hay nada que cambiar,
+      // pero la respuesta igual tiene que producir una reaccion.
       if (actual) actual.ajustada = true;
       return;
     }
     nueva.ajustada = true;
+    if (actual) {
+      nueva.minimo = visiblesAntes;
+      nueva.minimoDesde = respondidas;
+    }
     state.planta = nueva;
   }
 
@@ -275,16 +290,20 @@
         } else {
           state.qi = ni;
         }
-        // El apartamento se fija al empezar, con UNA excepción: al contestar
-        // cuántas alcobas quiere, el plano pasa a ser uno que de verdad las
-        // tenga. Enseñar un apartaestudio a quien acaba de pedir tres alcobas
-        // es la incoherencia más visible que puede tener la escena.
+        // El plano se reajusta con CADA respuesta, no solo con la de alcobas:
+        // es lo que hace que la escena reaccione a todo lo que se contesta.
         //
         // El cambio es barato de ver porque todas las plantas del sorteo son
         // rectangulares y se trocean igual (12 celdas, c0..c11): las piezas ya
         // puestas no mueren, se reacomodan y cambian de imagen.
-        if (qid === 'habitaciones') ajustarPlantaAHabitaciones(state);
-        else if (state.planta) state.planta.ajustada = false;
+        //
+        // Se mide cuantas piezas habia ANTES de cambiar para pasarselas como
+        // suelo al plano nuevo; si no, cambiar de plano podia restar piezas.
+        ajustarPlanta(
+          state,
+          list.filter(function (x) { return nextAnswers[x.id] !== undefined; }).length,
+          window.GDF.scene.celdasVisibles(state.answers, list, state.planta)
+        );
         break;
       }
 

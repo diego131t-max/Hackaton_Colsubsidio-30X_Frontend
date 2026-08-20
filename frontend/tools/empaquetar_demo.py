@@ -59,6 +59,10 @@ RE_URL_CSS = re.compile(r"url\((['\"]?)(assets/[^)'\"]+)\1\)")
 # En el JS las rutas viajan como cadenas: 'assets/planos/x.webp'
 RE_URL_JS = re.compile(r"(['\"])(assets/[^'\"]+\.(?:webp|png|jpe?g|svg))\1")
 
+# Catalogos GENERADOS: sus rutas las cambia el resolutor en tiempo de
+# ejecucion, no aqui, porque se repiten cientos de veces (ver mas abajo).
+GENERADOS = ("proyectos.js", "planos.js", "portada.js")
+
 
 def sin_query(ruta: str) -> str:
     return ruta.split("?")[0]
@@ -166,6 +170,20 @@ def main() -> int:
             if os.path.exists(os.path.join(APP, rel.replace("/", os.sep))):
                 usados.add(rel)
 
+    # Las rutas que estan ESCRITAS A MANO en el codigo (el logo de la cabecera,
+    # la marca del avatar) no las alcanza el resolutor: este recorre los
+    # OBJETOS del catalogo, y esas viven como literales dentro de funciones de
+    # plantilla. Se sustituyen aqui, en el sitio.
+    #
+    # Solo en los modulos que NO son catalogo generado, y la diferencia es
+    # brutal: templates.js cita 5 assets y data.js 20, pero proyectos.js cita
+    # 991 y planos.js 196. Sustituir en el sitio esos dos multiplicaria el peso
+    # del archivo por cinco — por eso existe el resolutor.
+    for ruta in list(fuentes):
+        if any(ruta.startswith("js/" + g) for g in GENERADOS):
+            continue
+        fuentes[ruta] = inlinear_assets(fuentes[ruta], RE_URL_JS, cache, 2)
+
     print("   %d assets distintos referenciados desde el JS" % len(usados))
     mapa = ",\n".join(
         "%s: %s" % (js_str(rel), js_str(como_data_uri(rel, cache))) for rel in sorted(usados)
@@ -188,6 +206,23 @@ def main() -> int:
         "  pasar(window.GDF_PROYECTOS, 0);\n"
         "  pasar(window.GDF_PORTADA, 0);\n"
         "  pasar(window.GDF.data, 0);\n"
+        "  // Los planos del quiz no bastan con `pasar`: GDF_PLANOS esta indexado\n"
+        "  // POR RUTA (la ruta es la CLAVE, no un valor) y planta.js pinta la\n"
+        "  // escena con esa misma cadena. Cambiando solo los valores, la tabla\n"
+        "  // seguia respondiendo pero el CSS pedia un archivo que en el archivo\n"
+        "  // unico no existe: el quiz salia SIN PLANO. Hay que cambiar las CLAVES\n"
+        "  // y las dos listas a la vez, para que sigan cuadrando entre si y con\n"
+        "  // el catalogo (indicePlanos cruza por src).\n"
+        "  if (window.GDF_PLANOS) {\n"
+        "    var T = {};\n"
+        "    Object.keys(window.GDF_PLANOS).forEach(function (k) {\n"
+        "      T[A[k] || k] = window.GDF_PLANOS[k];\n"
+        "    });\n"
+        "    window.GDF_PLANOS = T;\n"
+        "  }\n"
+        "  ['GDF_PLANOS_RECTOS', 'GDF_PLANOS_APTOS'].forEach(function (n) {\n"
+        "    if (window[n]) window[n] = window[n].map(function (s) { return A[s] || s; });\n"
+        "  });\n"
         "})();\n"
         "</script>"
     )

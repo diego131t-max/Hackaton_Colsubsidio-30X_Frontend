@@ -84,7 +84,26 @@ UMBRAL_MURO = 90      # por debajo de esto, el pixel es muro
 # pieza. Es el unico parametro que conviene ajustar MIRANDO la hoja de contactos
 # (#debug-planos) y no la estadistica: subirlo deja mordiscos en la silueta
 # donde habia un pedacito de balcon.
-UMBRAL_CELDA = 0.30
+#
+# SUBIO DE 0,30 A 0,55, y ese mordisco pasó de efecto secundario a ser el punto.
+# Es lo que permitio abrir el sorteo del quiz a los 36 planos APTOS (16
+# proyectos) en vez de solo a los 23 rectangulares (8 proyectos) — que es lo que
+# hace que el plano de la escena pueda perseguir al proyecto #1 del ranking.
+#
+# El problema de los 13 planos no rectangulares nunca fue su forma: la silueta
+# YA sigue la huella real de cada plano (planta.js filtra las celdas por este
+# mismo umbral y reconstruirPlano la repinta entera en cada cambio). Era la
+# BANDA INTERMEDIA. De sus 156 celdas, 11 estaban por debajo de 0,30 —o sea que
+# ya eran mordisco— y 111 por encima de 0,60; pero **34 caian entre 0,30 y
+# 0,59**: se dibujaban como pieza siendo casi todo papel, y en el plano armado
+# se leen como piezas que faltan. Con 0,55 esas 34 pasan a ser mordiscos y el
+# apartamento ensena su contorno real en L o en U.
+#
+# 0,55 y no mas: NINGUNO de los 23 planos rectangulares tiene una sola celda por
+# debajo de ese valor, asi que quedan intactos, y los 13 nuevos se quedan con
+# 8-12 celdas (el minimo es UTILES_MIN=8) y densidad media 0,79-0,91. A 0,58 un
+# plano cae por debajo de 8 celdas y a 0,60 caen tres.
+UMBRAL_CELDA = 0.55
 # Por debajo de esto una celda se ve como PAPEL EN BLANCO dentro del plano ya
 # armado, o sea como una pieza que falta. Hace dos cosas: dispara la busqueda
 # de otros cortes en elegir_cortes() (ver alla), y es el minimo que se le exige
@@ -99,20 +118,41 @@ UMBRAL_CELDA_MINIMA = 0.70
 # Para considerar un plano RECTANGULAR (huella que llena su recuadro, sin
 # esquinas vacias) se le pide a TODAS sus celdas al menos esta densidad.
 #
-# Historia, porque el numero se movio dos veces: estuvo en 0,40; bajo a 0,25
+# Historia, porque el numero se movio tres veces: estuvo en 0,40; bajo a 0,25
 # al vetar los planos con ROTULOS IMPRESOS (los dos unicos rectangulares de
 # tres alcobas los llevaban y el sorteo se quedaba sin con que atender a quien
 # pide tres); y con eso se colaron celdas al 26%, que en el plano armado se
 # ven como PIEZAS QUE FALTAN. La solucion no fue mover mas el umbral sino
 # arreglar la causa —donde caen los cortes, ver elegir_cortes()—, y con eso
-# se puede exigir directamente que ninguna celda quede floja.
-UMBRAL_RECT = UMBRAL_CELDA_MINIMA
+# se pudo exigir que ninguna celda quede floja (0,70).
+#
+# AHORA ESTA DESACOPLADO de UMBRAL_CELDA_MINIMA y vale 0,60. El motivo no es
+# estetico sino de MATCH: con 0,70 el sorteo se quedaba en 10 planos y solo DOS
+# eran VIS, asi que a quien elegia VIS —el caso comun en una demo de vivienda
+# subsidiada— la escena solo podia ensenarle uno de dos apartamentos, eligiera
+# la localidad que eligiera. Con 0,60 el sorteo pasa a 23 planos y 6 VIS, y la
+# cobertura por alcobas de 2/5/3 a 3/11/9.
+#
+# Lo que se acepta a cambio: alguna celda al 60% en vez de al 70%. Se puede
+# porque el papel blanco YA no se ve —lo resuelve el 
+# de .gdf-room, no este umbral (ver la seccion de templates.js en CLAUDE.md)—;
+# el umbral solo gobierna cuanto de rectangular se ve la silueta.
+UMBRAL_RECT = 0.60
 
 # --- filtros de aptitud ------------------------------------------------------
 # Un plano "apto" es el que se puede usar para la animacion del quiz. Los que no
 # pasan siguen en el archivo (por si acaso), pero fuera de GDF_PLANOS_APTOS.
 RATIO_MIN, RATIO_MAX = 0.85, 1.75   # 0,66 en una escena de 180px deja 119px de ancho
-ISLAS_MAX = 0.06                    # tinta fuera de la componente mayor
+# Tinta fuera de la componente conexa mayor, o sea un inserto suelto.
+#
+# NO LO SUBAS PARA RECUPERAR CALIA. Los tres planos planos de Calia
+# (calia-etapa-1-tipo-{2,3,a}-1) caen justo aqui, con 15-17 %, y montados en la
+# escena se ven de maravilla: 12/12 celdas, sin rotulos. Es tentador. Pero
+# llevan impresa una LINEA DE SECCION ROJA DISCONTINUA que cruza la lamina de
+# lado a lado (mas un punto rojo): es la guia que apunta al inserto, y en el
+# apartamento armado se lee como lo que es, la anotacion de un plano tecnico.
+# Misma familia que los rotulos impresos, mismo veredicto.
+ISLAS_MAX = 0.06
 UTILES_MIN = 8                      # hay 8 preguntas; una por lo menos cada una
 DENSIDAD_MEDIA_MIN = 0.55
 
@@ -176,6 +216,64 @@ VETADOS = {
     'assets/planos/karakali-tipo-1-1.webp': 'render isometrico 3D',
     'assets/planos/urbania-eco-tipo-1-1.webp': 'render isometrico 3D',
     'assets/planos/vibo-once-tipo-a-1.webp': 'render isometrico 3D',
+
+    # HERMANOS de los de arriba, encontrados al ampliar el sorteo a los planos
+    # no rectangulares. Varias tipologias publican DOS isometricos y antes solo
+    # se habia vetado uno: el otro nunca llegaba al sorteo porque lo paraba el
+    # filtro de rectangularidad, asi que nadie lo habia mirado. Al quitar ese
+    # filtro entraron los ocho, y montados en la escena se ven peor que los ya
+    # vetados: con el umbral de celda en 0,55 el rombo pierde sus esquinas y el
+    # apartamento queda como una CRUZ con trozos flotando sueltos.
+    #
+    # Moraleja para la proxima vez que se toque un umbral: cualquier plano que
+    # entre nuevo al sorteo hay que MIRARLO montado. No hay deteccion
+    # automatica de isometricos ni de rotulos.
+    'assets/planos/alamo-veramonte-tipo-5-1.webp': 'render isometrico 3D',
+    'assets/planos/austro-cuatro-vientos-tipo-2-2.webp': 'render isometrico 3D',
+    'assets/planos/calia-etapa-1-tipo-2-2.webp': 'render isometrico 3D',
+    'assets/planos/calia-etapa-1-tipo-3-3.webp': 'render isometrico 3D',
+    'assets/planos/calia-etapa-1-tipo-a-4.webp': 'render isometrico 3D',
+    'assets/planos/ciudad-jardin-tipo-a-2.webp': 'render isometrico 3D',
+    'assets/planos/karakali-tipo-1-3.webp': 'render isometrico 3D',
+    'assets/planos/urbania-eco-tipo-1-2.webp': 'render isometrico 3D',
+}
+
+
+# LA DESCRIPCION DEL CMS NO ES FIABLE, EN NINGUNA DE LAS DOS DIRECCIONES.
+# `clasificar_plano` lee el texto de la ficha y descarta lo que no diga
+# "decorado". Es un buen filtro por defecto —descarta 47 laminas de golpe— pero
+# se equivoca en los dos sentidos, comprobado montando las 47 en la escena real:
+#
+#   - Dice "obra gris" / "sin acabados" y es una PLANTA CENITAL AMUEBLADA,
+#     limpia y sin rotulos: los 7 de Baviera Park, los 2 de Senderos de
+#     Fontibon, Rosa Violeta tipo 1-1 y Alamo Veramonte tipo 1-1.
+#   - Dice "obra gris" y es un RENDER ISOMETRICO 3D: Acanto, Urbana 30,
+#     Urbania Eco, Urbania Terra, Las Violetas, Calia, Ciudad Jardin.
+#
+# Por eso esto es una lista BLANCA revisada a ojo y no un cambio del filtro:
+# aceptar todos los "gris" metia una docena de isometricos. Los tres proyectos
+# que entran por aqui —Baviera Park, Senderos de Fontibon y Rosa Violeta— no
+# tenian NINGUN plano usable, y con ellos el plano de la escena coincide con el
+# proyecto #1 del ranking el 55,4 % de las veces en vez del 48,3 %, y cae dentro
+# del top 6 el 94,5 % en vez del 83,8 %.
+#
+# Lo que NO entra, y por que, para no repetir el trabajo:
+#   - Element 142 (8 laminas), La Arboleda (7), Rosa Violeta 1-2 y 2-1,
+#     Ciudad Jardin 1-7: llevan ROTULOS IMPRESOS.
+#   - Connect Living 1-1: fondo beige a toda la lamina.
+#   - Karakali 2-2 y 3-3: cenitales de verdad, pero casi todo suelo vacio.
+RESCATADOS = {
+    "assets/planos/baviera-park-tipo-1-1.webp",
+    "assets/planos/baviera-park-tipo-1-2.webp",
+    "assets/planos/baviera-park-tipo-1-3.webp",
+    "assets/planos/baviera-park-tipo-1-4.webp",
+    "assets/planos/baviera-park-tipo-1-5.webp",
+    "assets/planos/baviera-park-tipo-1-6.webp",
+    "assets/planos/baviera-park-tipo-1-9.webp",
+    "assets/planos/senderos-fontibon-tipo-1-1.webp",
+    "assets/planos/senderos-fontibon-tipo-2-1.webp",
+    "assets/planos/rosa-violeta-tipo-1-1.webp",
+    "assets/planos/alamo-veramonte-tipo-1-1.webp",
 }
 
 
@@ -620,7 +718,9 @@ def analizar(ruta_abs: str, src: str, desc: str) -> dict | None:
     motivo = None
     if src in VETADOS:
         motivo = "vetado: " + VETADOS[src]
-    elif clasificar_plano(desc) != "decorado":
+    elif src not in RESCATADOS and clasificar_plano(desc) != "decorado":
+        # Ojo al orden: VETADOS gana sobre RESCATADOS, para poder sacar uno de
+        # estos sin tener que borrarlo de la lista blanca.
         motivo = "no es plano decorado (%s)" % clasificar_plano(desc)
     elif not (RATIO_MIN <= ratio <= RATIO_MAX):
         motivo = "ratio %.2f fuera de [%.2f, %.2f]" % (ratio, RATIO_MIN, RATIO_MAX)

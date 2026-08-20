@@ -97,6 +97,22 @@ comandos `python tools/…` se corren **desde dentro de `frontend/`**.
   El catálogo sale de `proyectos.js`; los 26 de antes quedaron como
   `PROJECTS_RESPALDO` por si ese archivo no carga. Las opciones de localidad
   del quiz **se derivan del catálogo**, no se escriben a mano.
+
+  **EL ORDEN DE `QUESTIONS` NO ES ARBITRARIO**, y la razón es la escena. El
+  plano se cierra al contestar la 7.ª pregunta (`cierran=7`, ver
+  `analizar_planos.py`) porque la 8.ª salta a resultados; así que **la última
+  pregunta tiene que ser la que menos mueva la recomendación**, o el usuario la
+  vería cambiar sin que dé tiempo a redibujar el plano. Va de lo que más
+  decide a lo que menos: capacidad de compra (`tipo`, `ingresos`) → necesidad
+  (`personas`, `habitaciones`) → ubicación (`zona`) → preferencias
+  (`piso_preferido`, `entorno_deseado`) → `edad`.
+
+  Está **medido** sobre 800 quices con respuestas al azar, contestando en
+  secuencia. Antes `edad` iba 4.ª y cerraba `entorno_deseado`: la última
+  pregunta movía el plano el 4,4 % de las veces y **cambiaba el proyecto #1 el
+  12,1 %**. Con `edad` de última: **3,1 % y 1,5 %**. El total de cambios de
+  plano por quiz apenas baja (3,14 → 2,92), o sea que la escena sigue igual de
+  viva. Si alguien vuelve a mover `edad` hacia arriba, ese 12 % vuelve.
   Cada proyecto trae además `amenidades[]` — las zonas comunes reales de la
   ficha, con `label`, `icon` (el SVG del propio sitio) y `clave` del
   vocabulario de 26. Esa `clave` es la que cruza con el `entorno_deseado` que
@@ -106,6 +122,39 @@ comandos `python tools/…` se corren **desde dentro de `frontend/`**.
 - `js/matching.js` — `computeMatches(answers, limite)`: scoring de proyectos.
   Cada resultado trae `factores` (qué sumó y qué restó), que alimenta el panel
   de depuración.
+
+  **Puntúan 7 de las 8 preguntas.** `tipo`, `ingresos`, `zona` y `habitaciones`
+  con los pesos de siempre; `personas` y `entorno_deseado` cruzando con datos
+  REALES del catálogo (las habitaciones y los m² de la ficha, y las
+  `amenidades[].clave` que el scraper ya normalizó al mismo vocabulario de 26
+  que usa la pregunta); y `edad` a través de `FACTOR_EDAD`, que mueve el techo
+  de precio de `bandaDe` porque a menor edad cabe más plazo de crédito. **Ese
+  último es un SUPUESTO sin verificar**, igual que las tasas pendientes de
+  `simulador.js`, y va con peso pequeño a propósito.
+
+  **`piso_preferido` NO puntúa, y no es un olvido**: ni los 31 proyectos ni las
+  81 tipologías guardan en qué piso está nada, así que cualquier peso sería
+  inventado y el panel `#debug` lo delataría. Esa pregunta sigue teniendo su
+  efecto de escena (`data-piso` cambia el fondo y la sombra). Para que puntúe
+  hay que sacar el dato en el scraper primero.
+
+  Ojo con la localidad: mientras la pregunta de zona no se ha contestado **no
+  se penaliza a nadie**. Antes caía un −16 a los 31 proyectos y, como el
+  puntaje ahora se muestra en vivo, eso lo hundía contra el piso del clamp
+  durante las cuatro primeras preguntas.
+
+  `compatDe(answers)` es el número que se ve **en vivo** durante el quiz. No es
+  el `score`: es el **promedio del `scoreBruto` del top 6**, mapeado
+  linealmente a [45 %, 97 %]. Las dos decisiones están medidas — el clamp
+  `[51,96]` existe para que ninguna tarjeta de resultados se vea humillada y en
+  una barra en vivo solo aplastaba el número contra los topes; y mirando solo
+  al líder, una respuesta que reordena el catálogo entero pero no cambia al
+  puntero dejaba la barra quieta. La escala sale del recorrido real de ese
+  promedio (35,8 a 89,3) sobre las 31.200 combinaciones posibles.
+
+  **Antes esa barra era falsa**: decía `42 + (answered/stepTotal)*55`, o sea el
+  progreso del quiz disfrazado de match. Si vuelve a aparecer una fórmula que
+  solo mira cuántas preguntas van, es un retroceso.
 - `js/recommender.js` — capa adaptadora. Normaliza lo que llegue a un
   **view-model único** (`id`, `nombre`, `ubicacion`, `precioCop`, `area`,
   `habitaciones[]`, `vis`, `amenidades[]`, `score`, `origen`, `local`) para que
@@ -147,23 +196,253 @@ comandos `python tools/…` se corren **desde dentro de `frontend/`**.
   **El apartamento es ILUSTRATIVO y ANÓNIMO**: en la escena **no se dice de qué
   proyecto es**.
 
-  Cambia **una sola vez**: al contestar cuántas alcobas quiere
-  (`ajustarPlantaAHabitaciones` en `state.js`), el plano pasa a ser uno que de
-  verdad las tenga. Enseñar un apartaestudio a quien acaba de pedir tres alcobas
-  era la incoherencia más visible que podía tener la escena. El cambio se ve
-  bien porque **todas las plantas del sorteo se trocean igual** (12 celdas,
-  `c0..c11`): cada pieza pintada encuentra su equivalente, se desplaza con la
-  transición CSS y cruza a la imagen nueva (`reacomodarPlano` en `main.js`), en
-  vez de morir y renacer.
+  **El plano se reelige con CADA respuesta** (`ajustarPlanta` en `state.js` →
+  `mejorApartamento` en `planta.js`), no solo con la de alcobas.
 
-  **La animación se dispara SIEMPRE que se contesta esa pregunta, cambie el
-  plano o no** (`planta.ajustada`, que `updatePlantaDOM` lee). El plano
-  provisional a veces ya tenía las alcobas pedidas —con 10 planos en el sorteo,
-  1 de cada 3 veces— y entonces contestar no producía ninguna reacción: la misma
-  acción unas veces movía el plano y otras se quedaba muerta. Lo que la
-  animación dice es "tu plano quedó ajustado a lo que pediste", y eso es cierto
-  en los dos casos. Ojo: `ajustada` reemplazó a `cambio`, que se escribía en
-  tres sitios y **no lo leía nadie**.
+  **CONVERGE HACIA EL PROYECTO #1 DEL RANKING**, siempre que ese proyecto tenga
+  plano. Lo hace `mejorApartamento` pasándole a `puntuarPlano` un mapa de bonos
+  por puesto (`BONO_RANGO = [120, 70, 45, 28, 16, 8]`), calculado con **una
+  sola** llamada a `computeMatches` por respuesta.
+
+  El bono es el término dominante a propósito: el resto de `puntuarPlano` se
+  mueve en un rango de ~100 puntos, así que **el ranking decide entre proyectos
+  y las respuestas siguen decidiendo dentro de cada proyecto** — cuál de los 9
+  planos de Nuva Park o de los 5 de La Arboleda.
+
+  Medido sobre 3.000 quices al azar recorriendo el quiz entero (con 700 la
+  cifra baila ±2 puntos entre corridas; con 3.000 se queda quieta):
+
+  | | plano = #1 | dentro del top 6 | cambios de plano/quiz |
+  |---|---|---|---|
+  | antes (perseguía solo a las respuestas) | 19,9 % | 61,0 % | 1,82 |
+  | ahora | **52,8 %** | **95,4 %** | **3,18** |
+
+  Y de regalo la escena queda MÁS viva, no menos: de 1,82 cambios por quiz a
+  3,20, y ningún quiz se queda sin ningún cambio (antes el 7,4 %).
+
+  **El 52,8 % es el TECHO, no una chapuza.** De los 31 proyectos del catálogo
+  solo **14** tienen plano usable: los otros 17 están vetados por llevar
+  rótulos impresos, líneas de sección o ser renders isométricos, y meterlos es
+  un retroceso (ver `analizar_planos.py` → `VETADOS`). Cuando el #1 no tiene
+  plano se usa el del **mejor rankeado que sí lo tenga**, y de ahí sale el
+  95,4 %. Si algún día se consiguen plantas cenitales limpias de los 17 que
+  faltan, este número sube solo, sin tocar código.
+
+  Dentro de un mismo proyecto las alcobas siguen pesando más que el resto, pero
+  no tanto como para que nada más pueda mover el plano.
+
+  **La localidad usa la VECINDAD, no solo el acierto exacto.** Es el arreglo
+  que más movió la aguja: los planos del sorteo están en 7 localidades de las
+  13 que ofrece el quiz, así que premiando solo la coincidencia exacta, más de
+  la mitad de las respuestas de zona dejaban a todos los planos empatados a
+  cero y el plano no se movía (medido: cambiaba el 9,7 % de las veces). Con la
+  vecindad oficial del Distrito —la misma tabla que usa `matching.js`— cada
+  plano queda a una distancia distinta de CUALQUIER localidad, y contestar
+  siempre reordena: **45 %**.
+
+  **El precio va graduado**, no "cabe / no cabe": con el criterio binario, dos
+  planos que cabían de sobra puntuaban igual y mover el rango de ingresos casi
+  nunca reordenaba nada. Ojo con un detalle del catálogo: **Infinitum Zentral
+  no publica precio**, y con el `0` se colaba como el más barato de todos y
+  ganaba siempre esa parte. Sin dato, no puntúa.
+
+  Cuánto mueve el plano cada pregunta, medido sobre 600 quices con respuestas
+  al azar **cambiando esa sola respuesta**: ingresos **69 %**, habitaciones
+  66 %, tipo 51 %, zona 45 %, personas 16 %, entorno 7 %, edad 3 %, piso 0 %. Y
+  los 28 planos del sorteo se usan todos — o sea que el pool entero es
+  alcanzable.
+
+  Contestadas **en secuencia** (que es como las ve el usuario) los números son
+  otros, porque cada pregunta llega con lo anterior ya fijado: tipo 100 %,
+  ingresos 73 %, habitaciones 67 %, zona 25 %, personas 19 %, entorno 5 %,
+  edad 3 %, piso 0 %. Ese es el reparto que manda el orden de `data.js`.
+
+  `MARGEN_CAMBIO` (3) es la histéresis: cuánto tiene que ganar un candidato
+  para desbancar al plano puesto. Está **medido** simulando 400 quices con
+  respuestas al azar — da 1,9 cambios de media (máximo 5) y deja sin ningún
+  cambio a 17 de 400. Con 6 bajaba a 1,6 y con 1 solo subía a 2,0: el cuello de
+  botella no es el margen, es que el mejor plano para un perfil dado es
+  legítimamente estable. Subirlo hace la escena más quieta; bajarlo no la hace
+  mucho más viva y sí arriesga el baile.
+
+  **La animación se dispara SIEMPRE que se contesta, cambie el plano o no**
+  (`planta.ajustada`, que `updatePlantaDOM` lee): si la misma acción unas veces
+  mueve el plano y otras se queda muerta, se lee como que la app se colgó. Ojo:
+  `ajustada` reemplazó a `cambio`, que se escribía en tres sitios y **no lo
+  leía nadie**.
+
+  **LA BOLA ROMPE EL PLANO EN PEDAZOS.** Cuelga de la misma grúa y entra solo
+  cuando el plano cambia de verdad (`golpeDeBola` → `demolerYReconstruir` en
+  `main.js`): golpea, la losa acusa el impacto, cada celda **se parte en
+  esquirlas irregulares** que salen despedidas (`esquirlasDe` →
+  `.gdf-room.esquirla` → `roomDemole`), y después el plano nuevo **se levanta
+  de cero**, pieza a pieza (`reconstruirPlano`).
+
+  **Cómo se rompe una celda sin recalcular nada.** Cada esquirla es un
+  `cloneNode` del propio `.gdf-room` con un `clip-path` distinto: hereda su
+  posición y su `.lienzo`, así que el trozo de imagen sale bien **sin tocar una
+  sola fórmula de `geometriaCeldas`**. Los polígonos los da `trocear`, que
+  parte el rectángulo con un centro y unos puntos de arista jitterados — cuatro
+  cuadriláteros que teselan la celda entera, el patrón de un cristal agrietado.
+
+  **`clip-path` NO rompe el `mix-blend-mode: multiply`** (comprobado: el plano
+  troceado y quieto se ve idéntico al intacto). Pero **el `multiply` no puede ir
+  en cada esquirla**: donde dos se solapan, la banda se multiplicaría dos veces
+  y quedaría una costura oscura dibujando cada corte. Por eso todas viven dentro
+  de `.gdf-cascotes`, que lleva `isolation: isolate` + `multiply`: entre ellas
+  componen normal y el grupo se multiplica UNA vez contra la losa. Medido, el
+  solape `CRECE` pasó de empeorar las costuras a taparlas.
+
+  **Cuántos pedazos**: 8 por celda en escritorio, 3 en pantallas estrechas y
+  tope global de 96 nodos — son elementos con imagen, `clip-path`, mezcla y
+  transform animándose a la vez.
+
+  **El tope no es decorativo**: si se queda por debajo de
+  `celdas × ESQUIRLAS_ANCHO`, el reparto baja los pedazos por celda **en
+  silencio** y el derribo se ve más pobre de lo que dice la constante. Con 8 en
+  escritorio el tope tiene que ser 96 o más.
+
+  Ojo con `trocear`: produce 2, 3, 4 o 4+n polígonos según lo que se le pida, y
+  **cada rama tiene que teselar exacto**. Verificado con n de 2 a 8 sobre 400
+  celdas: con el solape a cero el área de los pedazos suma el 100 % de la celda
+  con un desvío máximo de **0,0044 %**, que es redondeo de coma flotante. El
+  caso de 3 se fusiona de dos cuadriláteros contiguos; cuando faltaba esa rama,
+  pedir 3 devolvía 4 y en móvil salían un tercio más de nodos de los previstos.
+
+  Al medirlo en el navegador **el área sale por encima del 100 %, y está bien**:
+  los pedazos se SOLAPAN a propósito (`CRECE`) para tapar el antialiasing del
+  corte, y ese exceso crece con el número de pedazos — 4,3 % con 2, 8,8 % con 8.
+  Lo que no puede pasar nunca es quedarse por debajo del 100 %: eso sí sería un
+  agujero dentro de la celda.
+
+  **Y EL PLANO NUEVO TAMBIÉN LLEGA A PEDAZOS.** `ensamblarPieza` usa la misma
+  maquinaria al revés: cada pieza aparece troceada y dispersa alrededor de su
+  sitio, y sus pedazos convergen (`roomEnsambla`). Al terminar se retiran y
+  entra la pieza entera — mantener 12 celdas × 6 pedazos vivos el resto del
+  quiz sería tirar nodos, y además el derribo siguiente tiene que poder trocear
+  una pieza, no un puzzle ya roto.
+
+  **`data-construyendo` en la losa no es decorativo.** Mientras se arma el
+  plano, `updatePlantaDOM` no puede meter piezas por su cuenta: vería la losa
+  medio vacía, insertaría las que faltan, y luego el temporizador del armado
+  insertaría LAS MISMAS otra vez. Se llegaron a ver **16 piezas en un plano de
+  12**. Un cambio de plano sí interrumpe el armado (`demolerYReconstruir`
+  cancela sus temporizadores).
+
+  **El derribo se aplica en TODOS los cambios de plano.** `MIN_PIEZAS_DERRIBO`
+  vale 1: lo único que se salta es el cambio que cae con la losa aún vacía (el
+  de la primera respuesta), donde la bola golpearía el aire. Estuvo en 5 y era
+  demasiado — medido sobre 4 quices, **7 de los 11 cambios de plano se quedaban
+  sin animación**, y se percibía como que el derribo salía de vez en cuando y
+  sin motivo. Con 1, todo cambio que tenga algo que romper lo rompe (verificado:
+  0 cambios sin animar con piezas en la losa).
+
+  **Lo que hace que se lea como un derrumbe** y no como un desvanecido
+  programado — son cuatro cosas, y quitar cualquiera lo estropea:
+  - Cada pieza sale despedida **en la dirección que le marca el golpe**:
+    `main.js` calcula el vector del punto de impacto a la pieza y de ahí salen
+    `--dx`/`--dy`. No vuelan todas al mismo sitio.
+  - **Onda expansiva**: `--retardo` es proporcional a la distancia al impacto,
+    así que las piezas de al lado de la bola revientan primero. Esto es lo que
+    más hace por la sensación de golpe.
+  - **Caen con gravedad**: la curva (`cubic-bezier(0.3, 0, 0.75, 0.35)`)
+    arranca despacio y se acelera. Con un ease-out se veían flotar.
+  - **Polvo** en el punto de impacto (`polvoDeImpacto` → `.gdf-polvo`), tres
+    bocanadas de tamaño distinto. Vive en la ESCENA y no en la losa: la losa
+    recorta con `overflow:hidden` y además sus hijos van en `multiply`, que
+    teñiría el polvo.
+
+  El **sentido del giro** (`--rot`) es propio de cada pieza, NO del lado hacia
+  el que sale despedida. Atarlo a `dx` hacía que todas las piezas del mismo
+  lado del golpe voltearan igual y el derrumbe se leyera como un bloque
+  moviéndose. Volar es radial; voltear, no.
+
+  Todo el azar es **determinista**: sale de un hash FNV del id de la celda
+  (`jitter`), no de `Math.random()`. Mismo apartamento, mismos cascotes — que
+  es justo lo que permite verificarlo en un test.
+
+  El punto de impacto **se calcula, no se mide**: cuando esto corre la bola
+  está a mitad de su animación y su rect no sirve. `puntoDeImpacto` repite los
+  números del CSS (pivote en `left:45%` / `top:-14cqh`; cable
+  `min(70cqh, 560px)`; fotograma del impacto a −8°). Si cambian allí, hay que
+  cambiarlos aquí, o el polvo y la onda expansiva salen del sitio equivocado.
+
+  **Derribar es la TRANSICIÓN, no una resta.** Al terminar hay igual o más
+  piezas que antes: lo que se destruye se vuelve a levantar. Lo garantiza el
+  suelo `minimo`/`minimoDesde` de `scene.celdasVisibles`, que hace falta porque
+  cada plano trae su propio reparto `vis[]` — monótono dentro de sí mismo pero
+  no entre planos distintos, así que pasar de uno de 12 celdas a uno de 9
+  restaba apartamento justo después de contestar. `minimoDesde` guarda desde
+  qué pregunta aplica el suelo, para que `goBack` siga restando como siempre.
+
+  Hubo una versión intermedia en la que las piezas **se deslizaban** a su sitio
+  en el plano nuevo en vez de romperse (`reacomodarPlano`, ya borrada). Se
+  descartó a petición: lo que tiene que leerse es que la bola destruye lo que
+  ya no encaja, no que los muebles se mueven solos.
+
+  Tres cosas que hay que mantener a la par:
+  - `MS_DEMOLICION` (1360 ms en `main.js`) es la SUMA de lo que dice el CSS, no
+    un número a ojo: 340 ms de impacto + 220 ms de onda expansiva (`MS_ONDA`) +
+    780 ms de caída = 1340. Si se toca cualquiera de los tres hay que rehacer
+    la cuenta, o el plano nuevo se levanta encima de piezas que todavía están
+    cayendo (pasó: estaba en 840 y cortaba las últimas).
+  - `MS_ENTRE_PIEZAS` (130 ms) es lo que se espera entre pieza y pieza al
+    levantar el plano nuevo, y `MS_ENSAMBLA` (700 ms) lo que tarda cada una en
+    armarse desde sus pedazos: con los 60 ms de antes y sin armado, las 12
+    aparecían de golpe. Con estos, el armado dura ~1,6 s y se ve pieza por
+    pieza. Y la silueta tiene que acompañar:
+    `reconstruirPlano` la pinta **entera** (`siluetaHtml(huecos, [])`) y apaga
+    cada hueco cuando aterriza SU pieza. Pasándole `derived.rooms` los apagaba
+    todos de golpe y quedaban agujeros durante más de un segundo.
+  - `MS_HUELLA` (560 ms) es cuándo vuelven a encenderse los huecos grises:
+    mientras el apartamento se derrumba se queda su **huella**, así que la
+    escena nunca se ve vacía (medido: 0 fotogramas en blanco). No pueden volver
+    antes — las piezas van en `mix-blend-mode: multiply` y se multiplicarían
+    contra el gris, entintando el plano entero. Es el mismo motivo por el que
+    existe `apagarHueco`.
+  - Mientras `losa.dataset.demoliendo` está puesto, `updatePlantaDOM` **no toca
+    nada**. La reconstrucción relee el estado en ese momento
+    (`computeDerived`), no el de cuando empezó el derribo: así, contestar
+    durante la animación levanta el plano que toca ENTONCES y no uno caducado.
+
+  **LA GRÚA ESTÁ FUERA DE CUADRO, ARRIBA.** El pivote de `.gdf-bola` vive por
+  encima del borde superior de la escena (`left:45%`, `top:-14cqh`), así que el
+  cable se corta contra el borde —`.gdf-scene` lleva `overflow:hidden`— y la
+  grúa se intuye sin dibujarla. La bola entra desde la IZQUIERDA (+78°),
+  revienta el plano (−8°) y el impulso la saca por ARRIBA (−72°).
+
+  Antes colgaba de un **gancho amarillo** clavado en la esquina superior
+  izquierda, con un brazo giratorio y su contrapeso (`.gdf-crane-jib`,
+  `.gdf-crane-hook-top`). Se quitaron a petición: leían como ruido encima del
+  plano. **Si vuelve a aparecer algo amarillo en esa esquina, es un retroceso.**
+  Ojo al borrar: `@keyframes jibSpin` **se queda**, lo reusa el spinner de la
+  pantalla de confirmación (`.gdf-confirm-spinner`).
+
+  Tres detalles de la bola que costaron:
+  - **El pivote y el cable van los dos en unidades de contenedor**, no uno en px
+    y otro en `cqh`. La escena es `container-type: size` y mide 814×844 en
+    escritorio pero 390×253 en móvil: con el pivote en px, la proporción entre
+    "cuánto sube el pivote" y "cuánto mide el cable" cambiaba entre breakpoints
+    y la bola se quedaba colgando sin llegar al plano (ya pasó con el cable en
+    px). Con `-14cqh` y `min(70cqh, 560px)` el impacto cae DENTRO de la losa en
+    los dos tamaños — verificado midiendo el centro de la esfera contra el
+    rectángulo de la losa, no a ojo.
+  - **En CSS una rotación positiva manda la bola a la IZQUIERDA** (con el cable
+    apuntando a +Y, `x' = −L·sin θ`). Por eso el arco arranca en positivo
+    (izquierda) y termina en negativo, y no al revés.
+  - Los keyframes de `losaSacude` **repiten el `translate(-50%,-50%)`** porque
+    una animación SUSTITUYE al transform estático, no se compone con él.
+  - Con `prefers-reduced-motion` no hay derribo ni bola: las piezas viejas
+    desaparecen y el plano nuevo aparece. El cambio de plano ocurre igual — la
+    demolición es solo el gesto.
+
+  **Sobre la escena no va NADA que no sea el apartamento.** Encima flotaba el
+  avatar del usuario (el emoji de la escarapela, `.gdf-avatar-marker`) y se
+  quitó a petición: se leía como el logo de una constructora pegado al plano.
+  El avatar sigue en la escarapela, que es donde tiene sentido. Junto con el
+  rótulo del proyecto y la marca de localidad —quitados antes por el mismo
+  motivo—, la regla es una sola: si aparece algo flotando sobre la losa que no
+  sea la bola, es un retroceso.
 
   Sirve para enseñar
   cómo se construye una vivienda, nada más — la recomendación de verdad la
@@ -204,9 +483,11 @@ comandos `python tools/…` se corren **desde dentro de `frontend/`**.
     Y emite `vis[8]`: cuántas piezas se ven tras cada pregunta, repartidas por
     ÁREA de tinta y no por conteo. **El plano se cierra en la 7.ª pregunta**
     (`cierran=7`): así el apartamento queda TERMINADO justo al pintarse la
-    última pregunta, que es la pantalla en la que se ve completo. En la 8.ª no
-    se puede, porque al contestarla se salta a resultados, que ya no tiene
-    escena, y lo que revelara esa respuesta no lo vería nadie. Se probó cerrar
+    última pregunta, que es la pantalla en la que se ve completo (verificado:
+    12/12 piezas al pintarse la 8.ª). En la 8.ª no se puede, porque al
+    contestarla se salta a resultados, que ya no tiene escena, y lo que
+    revelara esa respuesta no lo vería nadie. Este `7` es también el motivo de
+    que `edad` cierre el quiz — ver el orden de `QUESTIONS` en `data.js`. Se probó cerrar
     en la 6.ª para que el plano completo acompañara las dos últimas preguntas y
     se descartó: el remate tiene que caer con la última respuesta que todavía
     añade piezas.
@@ -222,25 +503,94 @@ comandos `python tools/…` se corren **desde dentro de `frontend/`**.
     las costuras. **No se intenta borrarlos de la imagen**: no hay forma de
     rellenar el suelo de madera de debajo sin que se note el parche.
 
-    Y de esos 36, el quiz solo usa los **10 RECTANGULARES**
-    (`GDF_PLANOS_RECTOS`): aquellos cuyas 12 celdas superan `UMBRAL_RECT`, que
-    es exactamente `UMBRAL_CELDA_MINIMA` (0,55). O sea: **ninguna celda del
-    sorteo se ve como papel en blanco**. Así la silueta es un rectángulo limpio
-    y el plano se ve armarse entero, sin mordiscos en las esquinas.
-    `GDF_PLANOS_APTOS` se conserva como respaldo por si esa lista se quedara
-    vacía al regenerar.
+    **EL SORTEO SON LOS APTOS, NO LOS RECTANGULARES.** `poolDisponible()` en
+    `planta.js` usa `GDF_PLANOS_APTOS` (hoy **33 planos, 14 proyectos, 13 VIS**,
+    cobertura por alcobas **6 / 16 / 11**). `GDF_PLANOS_RECTOS` queda de
+    respaldo por si esa lista se quedara vacía al regenerar.
 
-    `UMBRAL_RECT` = `UMBRAL_CELDA_MINIMA` y hoy vale **0,70**, medido a ojo
-    sobre la pantalla y no por estadística. Subirlo más rompe la cobertura de 1
-    alcoba. Ojo: **ese umbral NO resuelve por sí solo el papel en blanco** —solo
-    lo encoge—; lo que lo resuelve es el `multiply` de las piezas (ver la
-    sección de `templates.js`).
+    Antes eran solo los rectangulares —23 planos de 8 proyectos— y eso dejaba
+    el match en el 19,9 %: el proyecto #1 casi nunca tenía plano.
+
+    **Lo que lo desbloqueó fue `UMBRAL_CELDA`, no `UMBRAL_RECT`.** El problema
+    de los planos no rectangulares nunca fue su forma: la silueta **ya sigue la
+    huella real** de cada plano (`construirPlanta` filtra las celdas por
+    densidad y `reconstruirPlano` repinta la silueta entera en cada cambio).
+    Era la BANDA INTERMEDIA de densidad. Medido sobre las 156 celdas de los 13
+    planos que estaban fuera:
+
+    | tinta de la celda | celdas | qué se veía |
+    |---|---|---|
+    | ≤ 30 % | 11 | no se dibujaba: mordisco, o sea la forma en L |
+    | **30–59 %** | **34** | **se dibujaba como pieza, siendo casi todo papel** |
+    | ≥ 60 % | 111 | pieza llena |
+
+    Esas 34 eran las que se leían como "piezas que faltan". Con `UMBRAL_CELDA`
+    en **0,55** pasan a ser mordiscos y el apartamento enseña su contorno real.
+
+    **0,55 y no más**: ninguno de los planos rectangulares tiene una sola celda
+    por debajo de ese valor, así que quedan intactos; los que entran se quedan
+    con 8–12 celdas (el mínimo es `UTILES_MIN` = 8) y densidad media 0,79–0,91.
+    A 0,58 un plano cae por debajo de 8 celdas y a 0,60 caen tres. **El valor
+    tiene que ser el mismo en `analizar_planos.py` y en `planta.js`**: si el de
+    JS fuera menor, `vis[]` prometería más piezas de las que se dibujan.
+
+    **CADA PLANO QUE ENTRE NUEVO AL SORTEO HAY QUE MIRARLO MONTADO.** No hay
+    detección automática de isométricos ni de rótulos, y esto costó una vuelta:
+    al ampliar el sorteo entraron **8 renders isométricos** que nadie había
+    curado nunca (el filtro de rectangularidad los paraba antes, así que jamás
+    llegaron a una hoja de contactos). Varias tipologías publican DOS
+    isométricos y solo se había vetado uno. Montados se ven peor que los ya
+    vetados: con el umbral en 0,55 el rombo pierde las esquinas y el
+    apartamento queda como una **cruz con trozos flotando**. Están todos en
+    `VETADOS`, y por eso el sorteo son 28 planos y no 36.
+
+    Al auditarlos, ojo con un falso positivo que cuesta media hora: si se
+    fotografía un plano recién montado **sin esperar a que cargue su `.webp`**,
+    sale una losa gris vacía y parece un plano roto. Hay que precargar la
+    imagen antes de capturar.
+
+    **Y ojo con querer recuperar Calia.** Sus tres plantas cenitales
+    (`calia-etapa-1-tipo-{2,3,a}-1`) se quedan fuera por `ISLAS_MAX` y montadas
+    se ven de maravilla —12/12 celdas, sin rótulos—, así que es tentador subir
+    ese filtro. No: llevan impresa una **línea de sección roja discontinua** que
+    cruza la lámina entera, la guía que apunta al inserto. Misma familia que los
+    rótulos, mismo veredicto.
+
+    **LA DESCRIPCIÓN DEL CMS NO ES FIABLE, Y NO SOLO PARA DESCARTAR.**
+    `clasificar_plano` lee el texto de la ficha y tira lo que no diga
+    "decorado": 47 láminas de golpe. Es un buen filtro por defecto, pero se
+    equivoca **en las dos direcciones** — comprobado montando las 47 en la
+    escena real:
+
+    - Dice "obra gris" / "sin acabados" y es una **planta cenital amueblada,
+      limpia y sin rótulos**: Baviera Park, Senderos de Fontibón, Rosa Violeta
+      y Álamo Veramonte tipo 1.
+    - Dice "obra gris" y es un **render isométrico 3D**: Acanto, Urbana 30,
+      Urbania Eco, Urbania Terra, Las Violetas, Calia, Ciudad Jardín.
+
+    Por eso existe `RESCATADOS` en `analizar_planos.py`: una lista **blanca**
+    revisada a ojo, no un cambio del filtro. Aceptar todos los "gris" metería
+    una docena de isométricos. Con ella entran 3 proyectos que no tenían NINGÚN
+    plano —Baviera Park, Senderos de Fontibón y Rosa Violeta— y el match sube
+    de 48,3 % a 52,8 %, y el "dentro del top 6" de 83,8 % a **95,4 %**.
+
+    Lo que se auditó y NO entra, para no repetir el trabajo: Element 142 (8
+    láminas), La Arboleda (7), Rosa Violeta 1-2 y 2-1 y Ciudad Jardín 1-7
+    llevan **rótulos impresos**; Connect Living 1-1 tiene **fondo beige** a toda
+    la lámina; Karakalí 2-2 y 3-3 son cenitales de verdad pero **casi todo
+    suelo vacío**.
+
+    **Y NO HAY MÁS QUE SCRAPEAR.** Comprobado contra el sitio en vivo: el
+    scraper ya se trae el 100 % de los planos que publica cada ficha (Element
+    142 publica 8 y tenemos 8; Centriko 6 y 6; Acanto 6 y 6; Baviera Park 9 y
+    9), y los originales del CMS **son 740×500**, el mismo tamaño que tenemos —
+    no hay una versión mayor escondida detrás del `thumbnail`. Lo que falta no
+    está en el sitio.
 
     **Ojo al tocar los filtros**: el sorteo tiene que seguir cubriendo 1, 2 y 3
-    alcobas (hoy: 2 / 5 / 3), porque de ahí sale el ajuste a lo que pide el
+    alcobas (hoy: 6 / 16 / 11), porque de ahí sale el ajuste a lo que pide el
     usuario. Si un cambio de umbral deja alguna cifra sin planos,
-    `elegirApartamento` cae al pool entero y vuelven las plantas con esquinas
-    vacías.
+    `elegirApartamento` cae al pool entero.
 
     **Y todo el que entre al sorteo hay que mirarlo por ROTULOS IMPRESOS** —no
     hay detección automática, es curación a ojo en `VETADOS`—. Al ampliarse el sorteo se auditaron los planos nuevos y aparecieron dos rotulados (Centriko
