@@ -33,8 +33,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 from uuid import UUID, uuid4
 
+from pydantic import ValidationError
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -284,7 +286,7 @@ async def _finalizar_lead(lead_id: UUID, senal: SenalBowl) -> None:
 # --------------------------------------------------------------------------- #
 @app.post("/webhooks/dapta/resultado")
 async def webhook_dapta_resultado(
-    resultado: ResultadoCalificacionDapta,
+    payload: dict[str, Any],
     background: BackgroundTasks,
     x_dapta_secret: str | None = Header(default=None),
 ) -> dict[str, str]:
@@ -296,6 +298,19 @@ async def webhook_dapta_resultado(
     Seguridad: si DAPTA_WEBHOOK_SECRET está configurado, exige el header
     X-Dapta-Secret. Si no está configurado, acepta (con TODO de cerrarlo).
     """
+    # El cuerpo entra como dict y NO como el modelo: Dapta manda la forma nativa
+    # `{"call": {...}}` y tiparlo directo devolvia 422 antes de llegar aqui. Ver
+    # ResultadoCalificacionDapta.desde_webhook.
+    try:
+        resultado = ResultadoCalificacionDapta.desde_webhook(payload)
+    except ValidationError as e:
+        # Un 422 aqui hace que Dapta de la entrega por fallida y el lead se
+        # queda sin ficha, asi que se registra con el cuerpo para poder
+        # reprocesarlo en vez de perderlo en silencio.
+        logger.error("Webhook de Dapta no parseable: %s | cuerpo=%s",
+                     e, str(payload)[:1200])
+        raise HTTPException(status_code=422, detail="Cuerpo del webhook no reconocido")
+
     # Verificación de autenticidad (opcional hasta configurar el secreto).
     if config.DAPTA_WEBHOOK_SECRET:
         if x_dapta_secret != config.DAPTA_WEBHOOK_SECRET:

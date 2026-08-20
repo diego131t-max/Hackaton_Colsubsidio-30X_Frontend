@@ -158,6 +158,58 @@ class ResultadoCalificacionDapta(BaseModel):
             return None
         return v
 
+
+    @classmethod
+    def desde_webhook(cls, crudo: dict[str, Any]) -> "ResultadoCalificacionDapta":
+        """
+        Construye el resultado desde el cuerpo REAL del webhook post-call.
+
+        Dapta no manda los campos planos: manda `{"call": {...}}` y mete la
+        extraccion dos niveles adentro, en `call.call_analysis
+        .custom_analysis_data`. Validar el cuerpo directo contra este modelo
+        devolvia 422, Dapta lo interpretaba como entrega fallida y marcaba la
+        llamada como `client_webhook_has_already_been_sent: false`. Resultado:
+        llamadas reales que ocurrian y nunca llegaban a la base.
+
+        Se sigue aceptando la forma plana: los simuladores y las pruebas la usan,
+        y no hay razon para romperlas.
+        """
+        cuerpo = crudo.get("call") if isinstance(crudo.get("call"), dict) else crudo
+        analisis = cuerpo.get("call_analysis") or {}
+        extraidos = analisis.get("custom_analysis_data") or {}
+
+        datos: dict[str, Any] = {
+            # Lo de la llamada vive en la raiz de `call`.
+            **{
+                k: cuerpo.get(k)
+                for k in (
+                    "call_id", "call_status", "to_number", "from_number",
+                    "disconnection_reason", "transcript", "recording_url",
+                )
+                if cuerpo.get(k) is not None
+            },
+            # La calificacion vive en custom_analysis_data.
+            **{k: v for k, v in extraidos.items() if v is not None},
+        }
+
+        # Si el agente no lleno resumen_llamada, el resumen generico de Dapta es
+        # mejor que nada: el asesor necesita algo que leer.
+        if not datos.get("resumen_llamada") and analisis.get("call_summary"):
+            datos["resumen_llamada"] = analisis["call_summary"]
+
+        # Nuestro id, si algun dia viaja de vuelta como variable dinamica.
+        dinamicas = cuerpo.get("dynamic_variables") or {}
+        for clave in ("external_lead_id", "lead_id"):
+            if dinamicas.get(clave):
+                datos.setdefault(clave, dinamicas[clave])
+
+        # La forma plana puede traer campos que no estan en `call`.
+        for clave in ("lead_id", "external_lead_id", "telefono"):
+            if crudo.get(clave) is not None:
+                datos.setdefault(clave, crudo[clave])
+
+        return cls(**datos)
+
     call_id: str
     call_status: str
     # Opcional: en llamadas sin contestar (no_answer/voicemail) Dapta no produce
