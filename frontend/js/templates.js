@@ -576,9 +576,11 @@
       state.apellido.trim() &&
       state.correo.trim() &&
       isValidEmail(state.correo.trim()) &&
-      state.telefono.trim() &&
+      window.GDF.leads.esMovilColombiano(state.telefono) &&
       state.consent
     );
+
+    var telMal = !!state.telefono.trim() && !window.GDF.leads.esMovilColombiano(state.telefono);
 
     var affiliateBadge =
       state.afiliado !== null
@@ -608,7 +610,10 @@
       '<label class="gdf-field-label">Correo electrónico</label>' +
       '<input class="gdf-input" id="correoInput" type="email" placeholder="Ej: ana.ruiz@correo.com" value="' + esc(state.correo) + '" />' +
       '<label class="gdf-field-label">Teléfono (WhatsApp)</label>' +
-      '<input class="gdf-input" id="telefonoInput" inputmode="tel" placeholder="Ej: 300 123 4567" value="' + esc(state.telefono) + '" />' +
+      '<input class="gdf-input' + (telMal ? ' gdf-input--error' : '') + '" id="telefonoInput" inputmode="tel" placeholder="Ej: 300 123 4567" value="' + esc(state.telefono) + '" />' +
+      // El aviso solo aparece cuando YA escribió algo y está mal: si saltara
+      // con el campo vacío, regañaría a quien todavía no ha empezado.
+      (telMal ? '<p class="gdf-field-error">Debe ser un móvil colombiano: 10 dígitos que empiezan por 3.</p>' : '') +
       '<label class="gdf-field-label">¿Estás afiliado a Colsubsidio?</label>' +
       '<div class="gdf-affiliate-row">' +
       '<button class="gdf-affiliate-btn' + (state.afiliado === 'Sí' ? ' selected' : '') + '" data-action="setAfiliado" data-value="Sí">Sí, afiliado</button>' +

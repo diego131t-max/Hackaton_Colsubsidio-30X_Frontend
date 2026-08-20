@@ -33,31 +33,41 @@ from backend.models.schemas import (
 
 def normalizar_telefono_e164(raw: str | None, indicativo: str = "57") -> str | None:
     """
-    Normaliza un teléfono colombiano a E.164 (+57XXXXXXXXXX) para que la
-    telefonía de Dapta pueda marcar SIN error.
+    Normaliza un movil colombiano a E.164 (+57 + 10 digitos que empiezan por 3).
 
-    La marcación saliente exige E.164; si llega el número crudo del formulario
-    ("312 592 3915", "57 3125923915", "+57 312-592-3915", "3125923915") la
-    llamada no conecta. Esta función tolera espacios, guiones, paréntesis y el
-    prefijo, y siempre devuelve "+57" + 10 dígitos del móvil.
+    Devuelve None si NO es un movil colombiano valido. Esa es la parte
+    importante: la version anterior "siempre devolvia algo", y con
+    "+57 23456789" (8 digitos, incompleto) producia +575723456789 — el
+    indicativo duplicado. Se guardaba en Supabase sin una queja, y el fallo
+    aparecia mucho despues, en la telefonia, lejos de donde el usuario todavia
+    podia corregirlo.
 
-    Devuelve el original si no logra interpretarlo (mejor mandar algo que None).
+    Fabricar un numero plausible a partir de uno invalido es peor que rechazar:
+    el dato malo sobrevive y contamina la correlacion del resultado.
     """
     if not raw:
-        return raw
-    digitos = re.sub(r"\D", "", raw)  # solo dígitos: ignora +, espacios, guiones
+        return None
+    digitos = re.sub(r"\D", "", str(raw))
     if not digitos:
-        return raw
-    # Ya trae indicativo país (57 + 10 dígitos = 12).
-    if digitos.startswith(indicativo) and len(digitos) == len(indicativo) + 10:
-        return "+" + digitos
-    # Solo el móvil de 10 dígitos (celular colombiano empieza por 3).
-    if len(digitos) == 10:
+        return None
+
+    # Prefijo internacional marcado como 00 (00 57 3...).
+    if digitos.startswith("00"):
+        digitos = digitos[2:]
+    # Con indicativo: se queda con lo que sigue.
+    if digitos.startswith(indicativo) and len(digitos) > 10:
+        digitos = digitos[len(indicativo):]
+
+    # Un movil colombiano son exactamente 10 digitos y empieza por 3. Los fijos
+    # (7 digitos + indicativo de ciudad) no sirven: el agente marca a moviles.
+    if len(digitos) == 10 and digitos.startswith("3"):
         return "+" + indicativo + digitos
-    # Otros largos: respeta el indicativo si ya está, si no lo antepone.
-    if digitos.startswith(indicativo):
-        return "+" + digitos
-    return "+" + indicativo + digitos
+    return None
+
+
+def es_movil_colombiano(raw: str | None) -> bool:
+    """Azucar para validar sin quedarse con el resultado."""
+    return normalizar_telefono_e164(raw) is not None
 
 
 async def disparar_llamada(

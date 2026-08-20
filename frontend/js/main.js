@@ -275,7 +275,7 @@
       state.apellido.trim() &&
       state.correo.trim() &&
       isValidEmail &&
-      state.telefono.trim() &&
+      window.GDF.leads.esMovilColombiano(state.telefono) &&
       state.consent
     );
     btn.classList.toggle('enabled', canStart);

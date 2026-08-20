@@ -34,6 +34,21 @@
   // El contrato pide un entero: 1 bajo, 2 medio, 3 alto, null sin preferencia.
   var PISO_PREFERIDO = { bajo: 1, medio: 2, alto: 3 };
 
+  // ESPEJO de normalizar_telefono_e164 del backend. Un móvil colombiano son
+  // exactamente 10 dígitos que empiezan por 3.
+  //
+  // Vive aquí y no solo en el backend porque el error hay que mostrarlo cuando
+  // la persona todavía está mirando el campo. Antes se aceptaba cualquier cosa,
+  // el backend fabricaba un E.164 plausible ("+57 23456789" acababa como
+  // +575723456789) y el fallo aparecía minutos después en la telefonía, con la
+  // persona ya ida.
+  function esMovilColombiano(raw) {
+    var d = String(raw || '').replace(/\D/g, '');
+    if (d.indexOf('00') === 0) d = d.slice(2);
+    if (d.indexOf('57') === 0 && d.length > 10) d = d.slice(2);
+    return d.length === 10 && d.charAt(0) === '3';
+  }
+
   // El agente de voz marca este número tal cual, sin re-formatear: solo le
   // anteponemos el indicativo si el usuario no lo escribió ya.
   function formatTelefonoMovil(raw) {
@@ -194,6 +209,7 @@
 
   window.GDF = window.GDF || {};
   window.GDF.leads = {
+    esMovilColombiano: esMovilColombiano,
     buildSenalBowl: buildSenalBowl,
     pedirRecomendaciones: pedirRecomendaciones,
     enviarProyectoElegido: enviarProyectoElegido,

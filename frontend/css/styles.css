@@ -4515,3 +4515,16 @@ a.pt-flink:hover {
     max-width: 460px;
   }
 }
+
+/* Campo con dato inválido y su explicación. El borde solo no basta: dice que
+   algo está mal pero no qué, y el usuario se queda mirando un botón apagado. */
+.gdf-input--error {
+  border-color: #d64530;
+  background: #fff6f4;
+}
+.gdf-field-error {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #c03a26;
+}

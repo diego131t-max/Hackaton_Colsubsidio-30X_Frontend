@@ -66,7 +66,30 @@ class SenalBowl(BaseModel):
     nombre: str
     apellido: str
     correo: str
-    telefono_movil: str  # crítico - sin esto Dapta no puede llamar
+    telefono_movil: str
+
+    @field_validator("telefono_movil")
+    @classmethod
+    def _movil_colombiano(cls, v: str) -> str:
+        """
+        Rechaza en la puerta lo que no sea un movil colombiano.
+
+        Antes se aceptaba cualquier cosa y el normalizador fabricaba un E.164
+        plausible: "+57 23456789" acababa guardado como +575723456789. El
+        formulario decia "listo", el lead entraba, y el fallo aparecia minutos
+        despues en la telefonia — cuando la persona ya se habia ido y nadie
+        podia pedirle el numero bueno.
+
+        Un 422 aqui es feo pero honesto: el formulario lo pinta junto al campo.
+        """
+        from backend.integrations.dapta_client import normalizar_telefono_e164
+
+        if normalizar_telefono_e164(v) is None:
+            raise ValueError(
+                "Debe ser un movil colombiano: 10 digitos que empiezan por 3 "
+                "(ej. 3125923915)"
+            )
+        return v  # crítico - sin esto Dapta no puede llamar
 
     # Elegibilidad básica
     afiliado: bool
