@@ -186,7 +186,8 @@ body {
 }
 .flujo {
   position: relative;
-  min-height: 190px;
+  /* Sin min-height: reservaba el hueco de las fichas que ahora estan en el
+     tablero, y al quitarlas quedaba un agujero de 190px en mitad del panel. */
 }
 .flujo__cables {
   position: absolute;
@@ -301,14 +302,6 @@ body {
   line-height: 1.35;
   color: var(--text-faint);
   max-width: 15ch;
-}
-.nodo__leads {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
 }
 
 /* Estados del nodo: azul de marca cuando trabajó, ámbar mientras trabaja. */
@@ -846,4 +839,410 @@ body.tema-asesor .live-pill {
   margin-top: 3px;
   font-size: 10.5px;
   color: var(--text-faint);
+}
+
+/* ========================================================================== */
+/* TABLERO DE ETAPAS                                                          */
+/* Estetica de la referencia (fondo profundo, acentos que brillan, tarjetas   */
+/* de cristal) pero con la paleta de marca: los acentos salen del azul y el   */
+/* amarillo Colsubsidio, no de un degradado generico.                         */
+/* ========================================================================== */
+
+.tablero {
+  margin: 18px 0 22px;
+}
+
+/* --- Riel superior -------------------------------------------------------- */
+.riel {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0 8px;
+}
+.riel__paso {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.riel__punto {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--st-inactivo);
+  box-shadow: 0 0 0 4px rgba(0, 103, 177, 0.14);
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+.riel__paso[data-estado="completado"] .riel__punto {
+  background: var(--st-completado);
+  box-shadow: 0 0 0 4px rgba(47, 191, 120, 0.18), 0 0 14px rgba(47, 191, 120, 0.5);
+}
+.riel__paso[data-estado="en_proceso"] .riel__punto {
+  background: var(--cs-amarillo);
+  box-shadow: 0 0 0 4px rgba(255, 208, 0, 0.18), 0 0 16px rgba(255, 208, 0, 0.55);
+  animation: latido 1.9s ease-in-out infinite;
+}
+.riel__paso[data-estado="error"] .riel__punto {
+  background: var(--st-error);
+  box-shadow: 0 0 0 4px rgba(255, 107, 87, 0.2), 0 0 14px rgba(255, 107, 87, 0.5);
+}
+@keyframes latido {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.28); }
+}
+
+/* El tramo se dibuja desde el punto hacia la derecha. Su relleno representa
+   el caudal REAL que pasa a la siguiente etapa, no una decoracion. */
+.riel__tramo {
+  position: absolute;
+  top: 5px;
+  left: calc(50% + 10px);
+  right: calc(-50% + 10px);
+  height: 2px;
+  background: var(--line-soft);
+  overflow: hidden;
+  border-radius: 2px;
+}
+.riel__tramo::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--paso, 0%);
+  background: linear-gradient(90deg, var(--cs-azul), var(--cs-azul-claro));
+  border-radius: 2px;
+  transition: width 0.9s cubic-bezier(0.22, 0.9, 0.28, 1);
+}
+.riel__pulso {
+  position: absolute;
+  top: -2px;
+  left: -18%;
+  width: 18%;
+  height: 6px;
+  border-radius: 6px;
+  background: radial-gradient(circle, var(--cs-amarillo), transparent 70%);
+  animation: recorrer 3.4s linear infinite;
+}
+@keyframes recorrer {
+  to { left: 110%; }
+}
+.riel__nombre {
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.riel__paso[data-estado="en_proceso"] .riel__nombre,
+.riel__paso[data-estado="completado"] .riel__nombre { color: var(--text-dim); }
+
+/* --- Columnas ------------------------------------------------------------- */
+.columnas {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.columna {
+  position: relative;
+  border-radius: 16px;
+  padding: 16px 14px 14px;
+  background:
+    linear-gradient(180deg, rgba(16, 48, 73, 0.92), rgba(11, 36, 56, 0.92));
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+  transition: border-color 0.35s ease, transform 0.35s ease;
+}
+/* Halo superior: el "brillo" de la referencia, teñido por estado. */
+.columna::before {
+  content: "";
+  position: absolute;
+  inset: -40% 20% auto 20%;
+  height: 120px;
+  background: radial-gradient(ellipse at center, var(--halo, transparent), transparent 70%);
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+.columna[data-estado="completado"] { --halo: rgba(47, 191, 120, 0.4); }
+.columna[data-estado="en_proceso"] { --halo: rgba(255, 208, 0, 0.42); }
+.columna[data-estado="error"]      { --halo: rgba(255, 107, 87, 0.42); }
+.columna[data-estado="inactivo"]   { --halo: rgba(63, 162, 224, 0.22); }
+.columna[data-estado="en_proceso"] { border-color: rgba(255, 208, 0, 0.35); }
+.columna[data-estado="error"]      { border-color: rgba(255, 107, 87, 0.45); }
+
+.columna__cab {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+}
+.columna__icono {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 10px;
+  background: rgba(0, 103, 177, 0.22);
+  border: 1px solid rgba(63, 162, 224, 0.3);
+  color: var(--cs-azul-claro);
+}
+.columna[data-estado="en_proceso"] .columna__icono {
+  color: var(--cs-amarillo);
+  border-color: rgba(255, 208, 0, 0.4);
+  background: rgba(255, 208, 0, 0.12);
+}
+.columna__icono svg { width: 18px; height: 18px; }
+.columna__titulos { min-width: 0; flex: 1; }
+.columna__nombre {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.columna__desc {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-faint);
+}
+.columna__conteo {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1;
+}
+
+.columna__barra {
+  height: 3px;
+  margin: 12px 0 6px;
+  border-radius: 3px;
+  background: var(--linea-honda);
+  overflow: hidden;
+}
+.columna__barra-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--cs-azul), var(--cs-azul-claro));
+  transition: width 0.9s cubic-bezier(0.22, 0.9, 0.28, 1);
+}
+.columna__caudal {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.columna__caudal b { color: var(--text-dim); }
+.columna__caida {
+  margin-left: 6px;
+  color: var(--st-error);
+  font-weight: 700;
+}
+
+/* --- Lista de tarjetas ---------------------------------------------------- */
+.columna__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  transition: max-height 0.45s cubic-bezier(0.22, 0.9, 0.28, 1);
+}
+.columna__lista--abierta { max-height: 620px; }
+.columna__lista::-webkit-scrollbar { width: 6px; }
+.columna__lista::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 6px;
+}
+.columna__vacia {
+  margin: 6px 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.tarjeta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border-radius: 11px;
+  border: 1px solid var(--line-soft);
+  background: rgba(6, 25, 42, 0.72);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+  animation: entrar 0.45s ease both;
+}
+@keyframes entrar {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.tarjeta:hover {
+  transform: translateY(-2px);
+  border-color: var(--cs-azul-claro);
+  background: rgba(16, 48, 73, 0.9);
+}
+.tarjeta--sel {
+  border-color: var(--cs-amarillo);
+  box-shadow: 0 0 0 1px var(--cs-amarillo), 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+/* Mientras la tarjeta viaja de una columna a otra. */
+.tarjeta--viajando {
+  border-color: var(--cs-amarillo);
+  box-shadow: 0 0 22px rgba(255, 208, 0, 0.45);
+  z-index: 3;
+}
+
+.tarjeta__avatar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: rgba(0, 103, 177, 0.3);
+  color: var(--cs-azul-claro);
+}
+.tarjeta__cuerpo { min-width: 0; flex: 1; display: block; }
+.tarjeta__nombre {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tarjeta__meta {
+  display: block;
+  font-size: 10px;
+  color: var(--text-faint);
+  /* Dos lineas antes que un "Fontibon · ha...": la zona y el tiempo son
+     justamente lo que se compara entre tarjetas. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+.tarjeta__estado {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  color: var(--text-faint);
+}
+.tarjeta[data-cal="caliente"] .tarjeta__estado { color: var(--cal-caliente); }
+.tarjeta[data-cal="tibio"]    .tarjeta__estado { color: var(--cal-tibio); }
+.tarjeta[data-cal="frio"]     .tarjeta__estado { color: var(--cal-frio); }
+.tarjeta[data-estado="error"] .tarjeta__estado { color: var(--st-error); }
+.tarjeta[data-estado="en_proceso"]:not([data-cal="caliente"]):not([data-cal="tibio"]):not([data-cal="frio"]) .tarjeta__estado {
+  color: var(--cs-amarillo);
+}
+/* Franja izquierda: el estado se lee sin leer la etiqueta. */
+.tarjeta[data-cal="caliente"] { box-shadow: inset 3px 0 0 var(--cal-caliente); }
+.tarjeta[data-cal="tibio"]    { box-shadow: inset 3px 0 0 var(--cal-tibio); }
+.tarjeta[data-cal="frio"]     { box-shadow: inset 3px 0 0 var(--cal-frio); }
+.tarjeta[data-estado="error"] { box-shadow: inset 3px 0 0 var(--st-error); }
+
+.columna__ver {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 9px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+.columna__ver:hover {
+  border-color: var(--cs-azul-claro);
+  color: var(--text);
+  background: rgba(0, 103, 177, 0.12);
+}
+.columna__ver-chevron { margin-left: auto; }
+.columna__ver-resto {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+/* --- Responsive ----------------------------------------------------------- */
+@media (max-width: 1180px) {
+  .columnas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .riel { grid-template-columns: repeat(3, 1fr); }
+  .riel__paso:nth-child(n + 4) { display: none; }
+}
+@media (max-width: 720px) {
+  .columnas { grid-template-columns: 1fr; }
+  .riel { display: none; }
+  .columna__lista { max-height: 260px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta,
+  .columna__barra-fill,
+  .riel__tramo::after,
+  .columna__lista { transition: none; animation: none; }
+  .riel__pulso, .riel__paso[data-estado="en_proceso"] .riel__punto { animation: none; }
+}
+
+.tablero__cab {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 2px 14px;
+}
+.tablero__titulo {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.tablero__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+/* Una etapa vacia no debe pesar lo mismo que una llena: se apaga. */
+.columna:has(.columna__vacia) { opacity: 0.62; }
+.columna:has(.columna__vacia):hover { opacity: 1; }
+
+/* En movil el titular caia en una palabra por linea porque compartia fila con
+   el conmutador de vistas. Se apila y se reduce. */
+@media (max-width: 560px) {
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .brand { flex: 1 1 100%; }
+  .brand__title { font-size: 15px; line-height: 1.25; }
+  .brand__sub { font-size: 11px; }
+  .vista-switch { flex: 1 1 auto; }
+  .live-pill { flex: 0 0 auto; }
+  .kpis { grid-template-columns: repeat(2, 1fr); }
 }

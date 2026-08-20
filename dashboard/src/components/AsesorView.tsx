@@ -293,11 +293,71 @@ function Timeline({ lead }: { lead: Lead }) {
   );
 }
 
+
+/**
+ * Qué tiene que hacer el asesor con ESTE lead, ahora.
+ *
+ * El nivel (caliente/tibio/frío) dice cuánta prioridad tiene, no qué hacer. Un
+ * tibio con cita el lunes y un tibio que no dejó fecha necesitan acciones
+ * opuestas, y hasta ahora la ficha los mostraba igual: el asesor tenía que
+ * reconstruirlo leyendo cuatro bloques distintos.
+ */
+function accionConcreta(lead: Lead): { titulo: string; detalle: string; urgencia: "alta" | "media" | "baja" } {
+  const d = lead.resultadoDapta;
+  const nivel = nivelDe(lead);
+
+  if (nivel === "sin_respuesta") {
+    return {
+      titulo: "No contestó — vuelve a intentarlo",
+      detalle: `La llamada no conectó (${oGuion(d?.disconnection_reason)}). Reintenta por teléfono o escríbele por WhatsApp.`,
+      urgencia: "media",
+    };
+  }
+  if (lead.agendadoPara && esPasado(lead.agendadoPara)) {
+    return {
+      titulo: "La cita ya pasó — reagenda",
+      detalle: `Estaba para ${fechaHora(lead.agendadoPara)}${d?.modalidad_agendada ? ` (${d.modalidad_agendada})` : ""}. Llama para reprogramar antes de que se enfríe.`,
+      urgencia: "alta",
+    };
+  }
+  if (lead.agendadoPara) {
+    return {
+      titulo: "Confirma la cita",
+      detalle: `${fechaHora(lead.agendadoPara)}${d?.modalidad_agendada ? ` · ${d.modalidad_agendada}` : ""}. Confírmala y prepara el proyecto del que habló con Manuela.`,
+      urgencia: "alta",
+    };
+  }
+  if (d?.disponible_visita) {
+    return {
+      titulo: "Aceptó asesoría, pero no quedó fecha",
+      detalle: "Dijo que sí a un siguiente paso y la llamada terminó sin agendar. Es el caso más fácil de cerrar: solo falta poner día y hora.",
+      urgencia: "alta",
+    };
+  }
+  const porNivel: Record<Calificacion, { titulo: string; detalle: string; urgencia: "alta" | "media" | "baja" }> = {
+    caliente: { titulo: "Llámalo hoy", detalle: "Tiene intención y respaldo. Cuanto antes lo llames, mejor.", urgencia: "alta" },
+    tibio: { titulo: "Dale seguimiento esta semana", detalle: "Hay interés pero falta resolver algo. Mira abajo qué fue.", urgencia: "media" },
+    frio: { titulo: "Baja prioridad", detalle: "No mostró intención real de avanzar ahora. Vale para una campaña más adelante.", urgencia: "baja" },
+  };
+  return porNivel[nivel as Calificacion];
+}
+
 function Detalle({ lead }: { lead: Lead }) {
   const s = lead.senal ?? ({} as Lead["senal"]);
   const d = lead.resultadoDapta;
   const nivel = nivelDe(lead);
-  const recs = (lead.recomendacionesDetalle ?? []).slice(0, 4);
+  const accion = accionConcreta(lead);
+  // El proyecto que la persona ELIGIÓ va primero aunque no sea el mejor
+  // puntuado: es del que habló con Manuela y del que va a hablar el asesor.
+  // Verlo en tercera posición obligaba a buscarlo en la lista.
+  const recs = [...(lead.recomendacionesDetalle ?? [])]
+    .sort((a, b) => {
+      const ea = esElElegido(a, lead.senal?.proyecto_elegido) ? 1 : 0;
+      const eb = esElElegido(b, lead.senal?.proyecto_elegido) ? 1 : 0;
+      if (ea !== eb) return eb - ea;
+      return (b.match_score ?? 0) - (a.match_score ?? 0);
+    })
+    .slice(0, 4);
   const entorno = Array.isArray(s.entorno_deseado)
     ? s.entorno_deseado
     : s.entorno_deseado
@@ -342,13 +402,6 @@ function Detalle({ lead }: { lead: Lead }) {
         </div>
       </header>
 
-      {/* Justificación del nivel: una línea, pegada al badge */}
-      <p className="as-justificacion">
-        {oGuion(d?.justificacion_calificacion) === "—" && nivel === "sin_respuesta"
-          ? `La llamada no conectó (${oGuion(d?.disconnection_reason)}).`
-          : oGuion(d?.justificacion_calificacion)}
-      </p>
-
       {/* Acciones directas: el asesor abre esta ficha para HACER algo, y lo que
           hace es llamar. Tenerlo a un clic evita el copiar-pegar del número,
           que es donde se cuelan los errores de digitación. */}
@@ -374,6 +427,40 @@ function Detalle({ lead }: { lead: Lead }) {
           </span>
         )}
       </div>
+
+      {/* BRIEF — lo que el asesor necesita ANTES de marcar, en un solo sitio y
+          en el orden en que se lo pregunta: qué hago, por qué, qué dijo, de qué
+          proyecto hablaron. Antes estaba repartido en cuatro bloques. */}
+      <section className="as-brief" data-urgencia={accion.urgencia}>
+        <header className="as-brief__cab">
+          <span className="as-brief__kicker">Brief</span>
+          <h3 className="as-brief__titulo">{accion.titulo}</h3>
+          <p className="as-brief__detalle">{accion.detalle}</p>
+        </header>
+
+        <div className="as-brief__grid">
+          <div className="as-brief__item">
+            <span className="as-brief__lbl">Por qué quedó en {nivel === "sin_respuesta" ? "sin respuesta" : ETIQUETA_NIVEL[nivel as Calificacion].toLowerCase()}</span>
+            <p className="as-brief__txt">
+              {oGuion(d?.justificacion_calificacion) === "—" && nivel === "sin_respuesta"
+                ? `La llamada no conectó (${oGuion(d?.disconnection_reason)}).`
+                : oGuion(d?.justificacion_calificacion)}
+            </p>
+          </div>
+
+          <div className="as-brief__item">
+            <span className="as-brief__lbl">Qué dijo en la llamada</span>
+            <p className="as-brief__txt">{oGuion(d?.resumen_llamada)}</p>
+          </div>
+
+          {s.proyecto_elegido && (
+            <div className="as-brief__item as-brief__item--proyecto">
+              <span className="as-brief__lbl">El proyecto del que hablaron</span>
+              <p className="as-brief__txt as-brief__txt--fuerte">{s.proyecto_elegido}</p>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* 1 — perfil */}
       <section className="as-bloque">
@@ -423,17 +510,6 @@ function Detalle({ lead }: { lead: Lead }) {
         )}
       </section>
 
-      {/* 3 — resumen ejecutivo de la llamada */}
-      <section className="as-bloque">
-        <h3 className="as-h3">Resumen de la llamada</h3>
-        {d?.resumen_llamada ? (
-          <p className="as-resumen">{d.resumen_llamada}</p>
-        ) : (
-          <p className="as-vacio">
-            Todavía no hay resumen: la llamada no se ha completado.
-          </p>
-        )}
-      </section>
 
       {/* 6 — disponibilidad */}
       <section className="as-bloque">

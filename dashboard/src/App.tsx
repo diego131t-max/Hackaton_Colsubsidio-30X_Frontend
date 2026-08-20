@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { SystemMap } from "./components/SystemMap";
+import { Tablero } from "./components/Tablero";
 import { PluginsPanel } from "./components/PluginsPanel";
 import { ActivityLog, type EntradaLog } from "./components/ActivityLog";
 import { LeadDetail } from "./components/LeadDetail";
@@ -195,7 +196,12 @@ export function App() {
           </div>
         </div>
 
-        <SystemMap
+        {/* El mapa de cables sigue arriba: cuenta COMO fluye el sistema. El
+            tablero cuenta QUIEN esta en cada etapa, que es la pregunta que se
+            hace el operador cuando algo se atasca. */}
+        <SystemMap leads={lista} />
+
+        <Tablero
           leads={lista}
           seleccionadoId={seleccionadoId}
           onSeleccionarLead={setSeleccionadoId}

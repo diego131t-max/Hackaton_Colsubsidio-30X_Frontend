@@ -24,8 +24,6 @@ import { Icono } from "./Iconos";
 
 interface Props {
   leads: Lead[];
-  onSeleccionarLead: (id: string) => void;
-  seleccionadoId: string | null;
 }
 
 // Geometría del riel. Fija a propósito: el alto no depende del contenido, así
@@ -57,7 +55,7 @@ function estadoDePieza(pieza: PiezaId, leads: Lead[]): EstadoNodo {
 }
 
 // --------------------------------------------------------------------------- //
-export function SystemMap({ leads, onSeleccionarLead, seleccionadoId }: Props) {
+export function SystemMap({ leads }: Props) {
   const lienzo = useRef<HTMLDivElement>(null);
   const [ancho, setAncho] = useState(0);
 
@@ -181,10 +179,6 @@ export function SystemMap({ leads, onSeleccionarLead, seleccionadoId }: Props) {
         <div className="flujo__nodos">
           {PIEZAS.map((pieza, i) => {
             const estado = estadoDePieza(pieza.id, leads);
-            const enEsta = leads
-              .filter((l) => l.nodoActual === pieza.id)
-              .slice(0, 3);
-            const restantes = aquiAhora[i] - enEsta.length;
             return (
               <div className="nodo" key={pieza.id} data-estado={estado}>
                 <div className="nodo__circulo">
@@ -196,24 +190,6 @@ export function SystemMap({ leads, onSeleccionarLead, seleccionadoId }: Props) {
                 <div className="nodo__nombre">{pieza.nombre}</div>
                 <div className="nodo__desc">{pieza.descripcion}</div>
 
-                <div className="nodo__leads">
-                  {enEsta.map((l) => (
-                    <button
-                      key={l.id}
-                      className={`ficha${l.id === seleccionadoId ? " ficha--sel" : ""}`}
-                      data-cal={l.calificacion ?? ""}
-                      data-estado={l.estadoNodo}
-                      onClick={() => onSeleccionarLead(l.id)}
-                      title={`${l.senal.nombre} ${l.senal.apellido}`}
-                    >
-                      <span className="ficha__dot" />
-                      {l.senal.nombre} {(l.senal.apellido ?? "")[0] ?? ""}.
-                    </button>
-                  ))}
-                  {restantes > 0 && (
-                    <span className="ficha ficha--mas">+{restantes}</span>
-                  )}
-                </div>
               </div>
             );
           })}

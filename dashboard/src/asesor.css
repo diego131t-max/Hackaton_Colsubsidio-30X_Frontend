@@ -854,3 +854,113 @@ body.tema-asesor {
   color: var(--tinta-media);
   font-variant-numeric: tabular-nums;
 }
+
+/* ========================================================================== */
+/* BRIEF — lo primero que lee el asesor                                       */
+/* Un solo bloque que responde, en orden: que hago, por que, que dijo, de que */
+/* proyecto hablaron. Antes eso vivia repartido en cuatro secciones y el      */
+/* asesor tenia que reconstruirlo leyendo toda la ficha.                      */
+/* ========================================================================== */
+
+.as-brief {
+  position: relative;
+  margin: 18px 0 22px;
+  border-radius: 14px;
+  border: 1px solid #d8e6f2;
+  background: linear-gradient(180deg, #f7fbff, #ffffff);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(10, 40, 66, 0.05), 0 10px 28px rgba(10, 40, 66, 0.06);
+  animation: as-brief-entrar 0.5s cubic-bezier(0.22, 0.9, 0.28, 1) both;
+}
+@keyframes as-brief-entrar {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+/* Franja de urgencia: el color dice cuanto corre sin leer una palabra. */
+.as-brief::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--urg, #b9cddd);
+}
+.as-brief[data-urgencia="alta"]  { --urg: #e8452c; }
+.as-brief[data-urgencia="media"] { --urg: #f0b400; }
+.as-brief[data-urgencia="baja"]  { --urg: #7ba7c9; }
+
+.as-brief__cab {
+  padding: 16px 18px 14px 22px;
+  border-bottom: 1px solid #e8f0f7;
+}
+.as-brief__kicker {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--urg, #7ba7c9);
+  margin-bottom: 6px;
+}
+.as-brief__titulo {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 800;
+  color: #0a2842;
+  letter-spacing: -0.01em;
+}
+.as-brief__detalle {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #47637c;
+  max-width: 68ch;
+}
+
+.as-brief__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.as-brief__item {
+  padding: 14px 18px 15px 22px;
+  border-right: 1px solid #eef4f9;
+  border-bottom: 1px solid #eef4f9;
+  min-width: 0;
+}
+.as-brief__item:nth-child(2n) { border-right: none; }
+.as-brief__item:last-child { border-bottom: none; }
+.as-brief__item--proyecto {
+  grid-column: 1 / -1;
+  background: #fffdf2;
+  border-bottom: none;
+}
+.as-brief__lbl {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8aa5bb;
+  margin-bottom: 5px;
+}
+.as-brief__txt {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #16394f;
+}
+.as-brief__txt--fuerte {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0a2842;
+}
+
+@media (max-width: 860px) {
+  .as-brief__grid { grid-template-columns: 1fr; }
+  .as-brief__item { border-right: none; }
+  .as-brief__titulo { font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-brief { animation: none; }
+}
