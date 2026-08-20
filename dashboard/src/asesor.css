@@ -817,6 +817,21 @@ body.tema-asesor {
 .as-seg--beneficio_caja {
   background: #ffd000;
 }
+/* Motor v2. Mismo criterio de color: azules de marca para los componentes de
+   ajuste y el amarillo institucional para la señal del historial, que es la
+   parte que aporta el aprendizaje sobre otros compradores. */
+.as-seg--perfil {
+  background: #0067b1;
+}
+.as-seg--historial {
+  background: #ffd000;
+}
+.as-seg--zonas {
+  background: #4a9fd4;
+}
+.as-seg--localidad {
+  background: #93c6e6;
+}
 .as-rec__leyenda {
   display: flex;
   flex-wrap: wrap;
