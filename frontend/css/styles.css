@@ -1804,355 +1804,46 @@ a.pt-flink:hover {
   pointer-events: none;
   z-index: 3;
 }
-/* ---- LA BOLA ------------------------------------------------------------
-   Cuelga de la misma grua y solo entra cuando el plano cambia (golpeDeBola en
-   main.js). NO demuele: el numero de piezas nunca baja — lo garantiza el suelo
-   de scene.celdasVisibles. Lo que hace es dar el golpe que justifica que el
-   apartamento se reordene, en vez de que las piezas se deslicen solas.
-
-   En reposo vive fuera de cuadro (opacidad 0 y recogida), asi que no ocupa
-   sitio ni tapa el plano entre pregunta y pregunta.
-
-   LA GRUA ESTA FUERA DE CUADRO, ARRIBA. El pivote vive por encima del borde
-   superior de la escena (`top: -14cqh`), asi que el cable se corta contra el
-   borde —`.gdf-scene` lleva `overflow:hidden`— y la grua se intuye sin
-   dibujarla. Antes colgaba de un gancho amarillo clavado en la esquina
-   superior izquierda; ese gancho y su brazo se quitaron a peticion (leian como
-   ruido encima del plano) y no deben volver.
-
-   EL PIVOTE Y EL CABLE VAN LOS DOS EN UNIDADES DE CONTENEDOR, no uno en px y
-   otro en cqh. La escena mide 814x844 en escritorio y 390x253 en movil: con el
-   pivote en px la proporcion entre "cuanto sube el pivote" y "cuanto mide el
-   cable" cambiaba entre breakpoints y la bola se quedaba colgando sin llegar
-   al plano (ya paso una vez con el cable en px). Con -14cqh y 70cqh el impacto
-   cae DENTRO de la losa en los dos tamanos:
-
-     escritorio  pivote (366, -118)  cable 560  ->  impacto (444, 436)
-                 losa x 57..757  y 185..659                    dentro
-     movil       pivote (176,  -35)  cable 177  ->  impacto (201, 140)
-                 losa x 27..363  y  13..240                    dentro
-
-   El tope en px evita que en pantallas muy altas la bola se vuelva absurda. */
-.gdf-bola {
+.gdf-crane-jib {
   position: absolute;
-  left: 45%;
-  top: -14cqh;
-  width: 0;
-  height: 0;
-  z-index: 8;
-  pointer-events: none;
-  opacity: 0;
-  /* El pivote es el gancho de la grua: la bola describe un arco a su
-     alrededor, que es como se mueve una de verdad. */
-  transform-origin: 0 0;
-  transform: rotate(74deg);
-  --largo: min(70cqh, 560px);
-}
-.gdf-bola .cable {
-  position: absolute;
-  left: -2.5px;
-  top: 0;
-  width: 5px;
-  height: var(--largo);
-  background: linear-gradient(#7c7b79, #2a2927);
+  left: 26px;
+  top: 26px;
+  width: 112px;
+  height: 5px;
+  margin-left: -8px;
+  margin-top: -2px;
+  transform-origin: 8px 50%;
+  background: linear-gradient(90deg, #ffd000, #ffe25c);
   border-radius: 3px;
-}
-/* La esfera es lo que tiene que leerse como PESO: 54px sobre una losa de ~500
-   es una bola que de verdad puede tirar un muro. Con 34 parecía un péndulo de
-   reloj. El aro exterior le da la lectura de hierro macizo. */
-.gdf-bola .esfera {
-  position: absolute;
-  left: -27px;
-  top: calc(var(--largo) - 8px);
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 32% 28%, #8b8a87, #1f1e1d 74%);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), inset 0 -6px 14px rgba(0, 0, 0, 0.5),
-    inset 0 4px 10px rgba(255, 255, 255, 0.16);
-  /* Se aplasta un pelo contra el plano en el fotograma del impacto. */
-  transform-origin: 50% 40%;
-  animation: esferaImpacto 1s cubic-bezier(0.36, 0, 0.3, 1) both;
-}
-.gdf-bola.golpea {
-  animation: bolaGolpe 1s cubic-bezier(0.36, 0, 0.3, 1) both;
-}
-
-/* El aplastamiento va en la esfera y no en el conjunto: si fuera en `.gdf-bola`
-   se compondría con la rotación del arco y deformaría también el cable. */
-@keyframes esferaImpacto {
-  0%,
-  30% {
-    transform: scale(1, 1);
-  }
-  /* justo al tocar */
-  37% {
-    transform: scale(1.16, 0.84);
-  }
-  46% {
-    transform: scale(0.94, 1.06);
-  }
-  60%,
-  100% {
-    transform: scale(1, 1);
-  }
-}
-
-/* El impacto cae a ~38 % de la animacion. Hasta entonces las piezas no se
-   mueven: sin este retraso se recolocaban ANTES de que la bola llegara y el
-   golpe no explicaba nada. Es SOLO un retraso — la geometria nueva ya esta
-   aplicada, asi que si la animacion no llega a correr el plano cambia igual. */
-.gdf-scene.esperando-golpe .gdf-room {
-  transition-delay: 0.34s;
-}
-.gdf-scene.esperando-golpe .gdf-losa {
-  animation: losaSacude 0.62s 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) both;
-}
-
-/* EL RECORRIDO: entra por la IZQUIERDA, revienta el plano y sale por ARRIBA.
-   Ojo con el signo — con el cable apuntando a +Y, una rotacion POSITIVA manda
-   la bola a la izquierda (x' = -L*sin0). Por eso el arco arranca en positivo y
-   termina en negativo, no al reves.
-
-   A +78 grados la bola queda fuera de cuadro por la izquierda y a la altura del
-   borde superior; a -8 esta sobre la losa; y a -72 vuelve a subir hasta salirse
-   por arriba, que es el remate que se pidio. Si cambian estos angulos o
-   `--largo`, hay que cambiar tambien `puntoDeImpacto` en main.js: alli estan
-   repetidos a mano porque cuando corre esa funcion la bola esta a mitad de
-   animacion y su rect no sirve. */
-@keyframes bolaGolpe {
-  0% {
-    opacity: 0;
-    transform: rotate(78deg) scale(0.82);
-  }
-  /* Entra ya a plena escala y con recorrido: la parte lenta del arco no aporta
-     nada, lo que se tiene que ver es la llegada. */
-  12% {
-    opacity: 1;
-    transform: rotate(60deg) scale(1);
-  }
-  /* impacto: aqui la bola esta encima del plano */
-  38% {
-    opacity: 1;
-    transform: rotate(-8deg) scale(1);
-  }
-  /* Rebote corto y seco, como algo que pesa. */
-  52% {
-    transform: rotate(-34deg) scale(1);
-  }
-  64% {
-    opacity: 1;
-    transform: rotate(-22deg) scale(1);
-  }
-  78% {
-    opacity: 1;
-    transform: rotate(-46deg) scale(1);
-  }
-  /* Y se va hacia ARRIBA: a -72 grados el cable esta casi horizontal, o sea que
-     la esfera queda a la altura del pivote, que vive fuera de cuadro. */
-  100% {
-    opacity: 0;
-    transform: rotate(-72deg) scale(0.9);
-  }
-}
-
-/* ---- EL DERRIBO ---------------------------------------------------------
-   Cuando el plano cambia, las piezas del anterior NO se deslizan a su nueva
-   posicion: la bola las revienta y caen, y el plano nuevo se levanta de cero
-   con las piezas cayendo otra vez de la grua (demolerYReconstruir en main.js).
-
-   OJO: derribar es la TRANSICION, no una resta. Al terminar hay igual o mas
-   piezas que antes — lo garantiza el suelo de scene.celdasVisibles. Lo que se
-   destruye se vuelve a levantar; el apartamento nunca encoge al avanzar.
-
-   LO QUE HACE QUE SE LEA COMO UN DERRUMBE, y no como un desvanecido:
-   - Cada pieza sale despedida en la direccion que le marca el golpe
-     (--dx/--dy), no todas hacia el mismo sitio. Lo calcula main.js con el
-     vector del punto de impacto a la pieza.
-   - Las de al lado de la bola revientan ANTES: --retardo es proporcional a la
-     distancia al impacto, o sea una onda expansiva.
-   - Caen con gravedad (la curva se acelera al final), girando y encogiendo,
-     no bajando a velocidad constante.
-   - Y hay polvo en el punto de impacto.
-
-   Todo es DETERMINISTA: el ruido por pieza sale de un hash de su id, no de
-   Math.random(). Mismo apartamento, mismos cascotes — que es lo que permite
-   verificarlo.
-
-   El total —0.34s de impacto + 0.22s de onda + 0.52s de caida = 1.08s— tiene
-   que caber en MS_DEMOLICION (1100 ms) de main.js. Si se toca uno hay que
-   rehacer la cuenta del otro, o el plano nuevo se levanta encima de piezas que
-   todavia estan cayendo. */
-
-/* El hueco gris vuelve a media caida (MS_HUELLA en main.js): mientras el
-   apartamento se derrumba se queda su HUELLA, en vez de un vacio. No puede
-   volver antes — las piezas van en `mix-blend-mode: multiply` y se
-   multiplicarian contra el gris, entintando el plano entero. */
-.gdf-hueco {
-  transition: opacity 0.3s ease;
-}
-
-/* Cada celda se rompe en PEDAZOS: `esquirlasDe` (main.js) la sustituye por
-   varios clones suyos, cada uno con un `clip-path` distinto que recorta un
-   trozo irregular. Al ser clones heredan su posición y su `.lienzo`, así que
-   el trozo de imagen sale bien sin recalcular nada.
-
-   Comprobado que `clip-path` NO rompe el `mix-blend-mode: multiply`: si lo
-   rompiera volvería a verse el papel blanco del plano. */
-/* Los cascotes van todos DENTRO de esta bolsa, y la mezcla se aplica al grupo,
-   no a cada pedazo. Si cada esquirla llevara su propio `multiply`, las bandas
-   donde dos se solapan se multiplicarían dos veces y quedaría una costura
-   oscura marcando cada corte (medido: se veía la cuadrícula de la rotura).
-   `isolation: isolate` hace que entre ellas compongan normal, y el grupo se
-   multiplica UNA vez contra la losa — que es lo que sigue haciendo desaparecer
-   el papel blanco del plano. */
-.gdf-cascotes {
-  position: absolute;
-  inset: 0;
-  isolation: isolate;
-  mix-blend-mode: multiply;
-  pointer-events: none;
+  opacity: 0.62;
+  animation: jibSpin 18s linear infinite;
   z-index: 6;
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.18);
 }
-.gdf-room.esquirla {
-  /* La mezcla la pone la bolsa; aquí sobra y además causaría la costura. */
-  mix-blend-mode: normal;
-  /* Nada de transición: es un nodo efímero que solo existe para caerse. */
-  transition: none;
-  will-change: transform, opacity;
-}
-/* El pedazo se oscurece un pelo al caer, como una cara interna que nunca daba
-   la luz. Va en un pseudo-elemento para no tocar el `multiply` de la pieza. */
-.gdf-room.esquirla::after {
-  content: '';
+.gdf-crane-jib .counterweight {
   position: absolute;
-  inset: 0;
-  background: rgba(51, 50, 47, 0.16);
-  opacity: 0;
-  animation: esquirlaSombra 0.78s cubic-bezier(0.3, 0, 0.78, 0.32) both;
-  animation-delay: calc(0.34s + var(--retardo, 0s));
-  pointer-events: none;
+  right: 2px;
+  top: -5px;
+  width: 14px;
+  height: 14px;
+  background: #33322f;
+  border-radius: 3px;
+  box-shadow: 0 3px 7px rgba(0, 0, 0, 0.3);
 }
-@keyframes esquirlaSombra {
-  0%,
-  14% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-/* Los pedazos con los que LLEGA una pieza del plano nuevo: aparecen dispersos
-   y convergen a su sitio. Es el gesto inverso del derribo y usa las mismas
-   variables, pero aqui --dx/--dy/--rot son de PARTIDA, no de llegada. */
-.gdf-room.ensamblando {
-  animation: roomEnsambla 0.7s cubic-bezier(0.2, 0.85, 0.3, 1.05) both;
-}
-
-@keyframes roomEnsambla {
-  0% {
-    opacity: 0;
-    transform: translate(var(--dx, 60px), var(--dy, -60px)) rotate(var(--rot, 20deg)) scale(0.6);
-  }
-  35% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 1;
-    transform: translate(0, 0) rotate(0deg) scale(1);
-  }
-}
-
-.gdf-room.demolida {
-  /* La curva es la clave del peso: arranca despacio (la pieza aun se aguanta),
-     y se acelera hasta el final. Con un ease-out se veia flotar. */
-  animation: roomDemole 0.78s cubic-bezier(0.3, 0, 0.78, 0.32) both;
-  animation-delay: calc(0.34s + var(--retardo, 0s));
-  /* La transicion de posicion estorbaria al transform del derribo. */
-  transition: none;
-  z-index: 6;
-}
-
-@keyframes roomDemole {
-  0% {
-    opacity: 1;
-    transform: translate(0, 0) rotate(0deg) scale(1);
-  }
-  /* El golpe la despega y la levanta un pelin: sin este tiron la caida arranca
-     desde parado y se lee como un fundido, no como algo que revienta. */
-  14% {
-    opacity: 1;
-    transform: translate(calc(var(--dx, 40px) * 0.16), -9px) rotate(calc(var(--rot, 30deg) * 0.18))
-      scale(1.03);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(var(--dx, 40px), var(--dy, 140px)) rotate(var(--rot, 30deg))
-      scale(var(--esc, 0.6));
-  }
-}
-
-/* ---- EL POLVO -----------------------------------------------------------
-   Tres bocanadas con tamano y desplazamiento propios (--t, --rx, --ry), para
-   que no se lea como un solo circulo creciendo. Vive en la ESCENA y no en la
-   losa: la losa recorta con overflow:hidden y ademas sus hijos van en
-   `multiply`, que teniria el polvo. */
-.gdf-polvo {
+.gdf-crane-hook-top {
   position: absolute;
-  width: 0;
-  height: 0;
+  left: 26px;
+  top: 26px;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  margin-top: -8px;
+  box-sizing: border-box;
+  background: #ffd000;
+  border: 2.5px solid #33322f;
+  border-radius: 4px;
   z-index: 7;
-  pointer-events: none;
-}
-.gdf-polvo i {
-  position: absolute;
-  left: var(--rx, 0);
-  top: var(--ry, 0);
-  width: 86px;
-  height: 86px;
-  margin: -43px 0 0 -43px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(120, 118, 114, 0.5), rgba(120, 118, 114, 0) 68%);
-  animation: polvoSube 0.85s 0.3s ease-out both;
-  scale: var(--t, 1);
-}
-
-@keyframes polvoSube {
-  0% {
-    opacity: 0;
-    transform: translate(0, 0) scale(0.25);
-  }
-  22% {
-    opacity: 0.85;
-    transform: translate(0, -6px) scale(0.9);
-  }
-  100% {
-    opacity: 0;
-    /* Sube y se abre, como el polvo de verdad. */
-    transform: translate(6px, -34px) scale(1.9);
-  }
-}
-
-/* La losa entera acusa el golpe. Muy corto y muy pequeno: es el acento, no el
-   protagonista — lo que tiene que mirarse son las piezas recolocandose.
-   Los keyframes REPITEN el translate(-50%,-50%) porque una animacion sustituye
-   al transform estatico, no se compone con el: sin repetirlo, la losa saltaba
-   al centro exacto durante medio segundo. */
-@keyframes losaSacude {
-  0%,
-  100% {
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-  18% {
-    transform: translate(calc(-50% + 9px), calc(-50% + 3px)) rotate(1.1deg);
-  }
-  42% {
-    transform: translate(calc(-50% - 6px), calc(-50% - 2px)) rotate(-0.8deg);
-  }
-  68% {
-    transform: translate(calc(-50% + 3px), -50%) rotate(0.4deg);
-  }
+  opacity: 0.85;
 }
 
 
@@ -2222,6 +1913,16 @@ a.pt-flink:hover {
 .gdf-halo-chip:nth-child(4) { animation-delay: 0.18s; }
 .gdf-halo-chip:nth-child(5) { animation-delay: 0.24s; }
 .gdf-halo-chip:nth-child(6) { animation-delay: 0.3s; }
+
+.gdf-avatar-marker {
+  position: absolute;
+  right: 14px;
+  top: 11px;
+  z-index: 9;
+  font-size: 20px;
+  animation: hookBob 2.4s ease-in-out infinite;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.25));
+}
 
 /* ============ QUIZ ============ */
 
@@ -4378,6 +4079,15 @@ a.pt-flink:hover {
 
 /* ============ KEYFRAMES ============ */
 
+@keyframes hookBob {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(2px, 6px) rotate(3deg);
+  }
+}
 /* .gdf-losa se centra con `left:50%; top:50%; transform:translate(-50%,-50%)`.
    Una animación REEMPLAZA el transform estático mientras corre -no lo
    compone-, así que sin repetir el translate() en cada paso el escalado
@@ -4440,28 +4150,7 @@ a.pt-flink:hover {
   .gdf-room.animated::after {
     display: none;
   }
-  /* La bola no entra y las piezas no esperan a nadie: el plano se reordena
-     igual, solo que sin el gesto. */
-  .gdf-bola {
-    display: none;
-  }
-  /* Sin derribo ni polvo: las piezas desaparecen y el plano nuevo aparece. El
-     cambio de plano ocurre igual — la demolicion es solo el gesto. */
-  .gdf-room.demolida,
-  .gdf-room.esquirla::after {
-    animation: none !important;
-    opacity: 0;
-  }
-  .gdf-room.ensamblando {
-    animation: none !important;
-  }
-  .gdf-polvo {
-    display: none;
-  }
-  .gdf-scene.esperando-golpe .gdf-room {
-    transition-delay: 0s;
-  }
-  .gdf-scene.esperando-golpe .gdf-losa {
+  .gdf-crane-jib {
     animation: none !important;
   }
 }

@@ -705,6 +705,7 @@
 
   function sceneBlock(state, derived, animarTodo) {
     var showCrane = state.screen === 'quiz';
+    var genderObj = findGender(state.gender);
     var planta = derived.planta;
     var answers = state.answers || {};
 
@@ -729,28 +730,11 @@
         '</div>';
     }
 
-    // La bola cuelga de una grúa que está FUERA DE CUADRO, por encima de la
-    // escena: el cable se corta contra el borde superior (`.gdf-scene` lleva
-    // `overflow:hidden`) y eso es justo lo que se quiere: que la grúa se
-    // intuya, no que se dibuje.
-    //
-    // Aquí vivían un brazo amarillo giratorio (`.gdf-crane-jib` + su
-    // contrapeso) y un gancho amarillo (`.gdf-crane-hook-top`) clavados en la
-    // esquina superior izquierda. Se quitaron a petición: leían como ruido
-    // encima del plano. Si vuelven a aparecer, es un retroceso.
-    //
-    // La bola entra solo cuando el plano cambia (ver golpeDeBola en main.js):
-    // llega desde la izquierda, revienta el plano en pedazos y el impulso la
-    // saca por arriba.
     var craneHtml = showCrane
-      ? '<div class="gdf-bola" aria-hidden="true"><i class="cable"></i><i class="esfera"></i></div>'
+      ? '<div class="gdf-crane-jib"><div class="counterweight"></div></div><div class="gdf-crane-hook-top"></div>'
       : '';
 
-    // Aquí flotaba el avatar del usuario (`.gdf-avatar-marker`, el emoji que
-    // eligió en la escarapela). Se quitó a petición: encima de la escena no
-    // aporta nada y se leía como el logo de una constructora pegado al plano.
-    // El avatar SIGUE en la escarapela (ver carnet), que es donde tiene
-    // sentido.
+    var avatarMarker = '<div class="gdf-avatar-marker">' + genderObj.emoji + '</div>';
 
     // La pregunta del piso no añade piezas: cambia lo que se ve DEBAJO del
     // apartamento (a qué altura está) y la sombra que proyecta. Es data-* para
@@ -765,7 +749,7 @@
     // usuario acababa de elegir en la pregunta 5.
     return (
       '<div class="gdf-scene"' + piso + '>' +
-      loteHtml + roomsHtml + haloHtml + craneHtml +
+      loteHtml + roomsHtml + haloHtml + craneHtml + avatarMarker +
       '</div>'
     );
   }
@@ -851,13 +835,8 @@
 
     return (
       '<div class="gdf-screen gdf-quiz">' +
-      // El número es REAL: sale de matching.js con lo contestado hasta ahora
-      // (ver compatDe). Por eso el rótulo dice "ahora mismo" — a diferencia de
-      // la barra falsa que había antes, esta puede BAJAR si una respuesta
-      // aleja a la persona del catálogo, y prometerle "compatibilidad" a secas
-      // haría que bajar se leyera como un error de la app.
       '<div class="gdf-compat">' +
-      '<div class="gdf-compat-row"><span>Encaje con el catálogo ahora mismo</span><span>' + derived.compat + '%</span></div>' +
+      '<div class="gdf-compat-row"><span>Compatibilidad con proyectos</span><span>' + derived.compat + '%</span></div>' +
       '<div class="gdf-progress-track"><div class="gdf-progress-fill" style="width:' + derived.compat + '%"></div></div>' +
       '</div>' +
       '<div class="gdf-step-count">Pregunta ' + Math.min(derived.answered + 1, derived.stepTotal) + ' de ' + derived.stepTotal + '</div>' +

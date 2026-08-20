@@ -4,18 +4,6 @@
 (function () {
   'use strict';
 
-  // EL ORDEN NO ES ARBITRARIO. Va de lo que mas define la recomendacion a lo
-  // que menos: capacidad de compra (tipo, ingresos) -> necesidad (personas,
-  // habitaciones) -> ubicacion (zona) -> preferencias (piso, entorno) -> edad.
-  //
-  // El motivo es la ESCENA. El plano se cierra al contestar la 7.a pregunta
-  // (`cierran=7` en tools/analizar_planos.py) porque la 8.a salta a resultados
-  // y lo que revelara no lo veria nadie. Asi que la ultima pregunta tiene que
-  // ser la que MENOS mueva el plano, o se veria cambiar la recomendacion sin
-  // tiempo de redibujarla. Medido sobre 600 quices al azar, cuanto mueve el
-  // plano cada una: ingresos 69 %, habitaciones 66 %, tipo 51 %, zona 45 %,
-  // personas 16 %, entorno 7 %, edad 3 %, piso 0 %. Por eso `edad` va de
-  // ultima y las dos de mas peso van de primeras.
   var QUESTIONS = [
     {
       id: 'tipo',
@@ -61,17 +49,19 @@
       ],
     },
     {
-      id: 'habitaciones',
-      color: '#ffd000',
+      // Entero exacto (no rango): el contrato de leads con el backend
+      // (SenalBowl, ver js/leads.js) pide `edad` como number, no un bucket.
+      // quiz() en templates.js renderiza un input numérico para q.type
+      // === 'number' en vez de la grilla de botones de siempre.
+      id: 'edad',
+      color: '#575756',
       w: 72,
-      title: '¿Cuántas habitaciones necesitas?',
-      sub: 'Así ajustamos el tamaño de tu hogar.',
-      cols: 3,
-      options: [
-        { v: '1', label: '1' },
-        { v: '2', label: '2' },
-        { v: '3+', label: '3+' },
-      ],
+      title: '¿Cuántos años tienes?',
+      sub: 'Algunos proyectos tienen condiciones especiales según tu edad.',
+      type: 'number',
+      min: 18,
+      max: 99,
+      placeholder: 'Ej: 31',
     },
     {
       // Ya no se pregunta el municipio: la demo es SOLO de Bogotá (los 31
@@ -87,15 +77,29 @@
       cols: 2,
       options: [],
     },
-    // Estas 2 preguntas (piso_preferido y entorno_deseado) existen solo para
-    // llenar campos OPCIONALES del contrato de leads (ver js/leads.js). Los ids coinciden 1:1 con los
+    {
+      id: 'habitaciones',
+      color: '#ffd000',
+      w: 60,
+      title: '¿Cuántas habitaciones necesitas?',
+      sub: 'Así ajustamos el tamaño de tu hogar.',
+      cols: 3,
+      options: [
+        { v: '1', label: '1' },
+        { v: '2', label: '2' },
+        { v: '3+', label: '3+' },
+      ],
+    },
+    // Las 2 preguntas de acá abajo son nuevas: existen solo para llenar
+    // campos OPCIONALES del contrato de leads (piso_preferido,
+    // entorno_deseado — ver js/leads.js). Los ids coinciden 1:1 con los
     // nombres del contrato a propósito, para que el mapeo en leads.js sea
     // casi un passthrough directo. (tipo_inmueble se quitó del quiz: sigue
     // siendo un campo válido del contrato, leads.js lo manda como null.)
     {
       id: 'piso_preferido',
       color: '#4a94cc',
-      w: 60,
+      w: 52,
       title: '¿Qué piso prefieres?',
       sub: 'Si no te importa, elige "Sin preferencia".',
       cols: 4,
@@ -109,7 +113,7 @@
     {
       id: 'entorno_deseado',
       color: '#8a8a89',
-      w: 52,
+      w: 48,
       title: '¿Buscas algo en particular del entorno?',
       sub: 'Opcional — elige todas las que apliquen.',
       type: 'multiselect',
@@ -154,28 +158,6 @@
         { v: 'sauna', label: 'Sauna' },
         { v: 'cancha multiple', label: 'Cancha múltiple' },
       ],
-    },
-    {
-      // VA DE ULTIMA A PROPOSITO: es la pregunta que menos mueve el plano
-      // (3 % de las veces) y la que menos pesa en el match — `FACTOR_EDAD` en
-      // matching.js solo corre el techo de precio, y es un SUPUESTO sin
-      // verificar. Contestarla salta a resultados, asi que cualquier pregunta
-      // de mas peso aqui cambiaria la recomendacion sin que la escena llegue
-      // a redibujar el plano.
-      //
-      // Entero exacto (no rango): el contrato de leads con el backend
-      // (SenalBowl, ver js/leads.js) pide `edad` como number, no un bucket.
-      // quiz() en templates.js renderiza un input numérico para q.type
-      // === 'number' en vez de la grilla de botones de siempre.
-      id: 'edad',
-      color: '#575756',
-      w: 48,
-      title: '¿Cuántos años tienes?',
-      sub: 'Algunos proyectos tienen condiciones especiales según tu edad.',
-      type: 'number',
-      min: 18,
-      max: 99,
-      placeholder: 'Ej: 31',
     },
   ];
 
