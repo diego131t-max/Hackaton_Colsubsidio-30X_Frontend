@@ -62,7 +62,7 @@ from modelo import (  # noqa: E402
     post_arreglos,
     primer_filtro,
 )
-from prep import rango_salario  # noqa: E402
+from prep import SMMLV as SMMLV_MOTOR, rango_salario  # noqa: E402
 
 class ZonaDesconocida(ValueError):
     """La zona del formulario no corresponde a ninguna localidad de Bogota."""
@@ -85,16 +85,37 @@ def _cargar_catalogo() -> list[dict[str, Any]]:
     return _catalogo
 
 
-def _banda_salario(senal: SenalBowl) -> int:
-    """
-    Traduce el rango de ingreso del formulario al codigo 1..4 del motor.
+# El formulario PREGUNTA en bandas de SMMLV ('2-4 SMMLV') y las convierte a
+# pesos antes de enviarlas, perdiendo la banda por el camino. Volver a
+# deducirla dividiendo por un SMMLV es una trampa: hay tres valores distintos
+# en circulacion (1.400.000 en las reglas financieras, 2.000.000 en el motor, y
+# ~1.425.000 implicito en las etiquetas del formulario), asi que el resultado
+# depende de cual se elija. Con 2.000.000, "Mas de $11.400.000" caia en banda 3
+# en vez de 4: la persona con mayor ingreso quedaba mal clasificada.
+#
+# Como el formulario ofrece un conjunto CERRADO de cuatro opciones, se mapea
+# directo. Verificado contra las 153 filas de produccion: solo existen estas.
+BANDAS_POR_ETIQUETA = {
+    "hasta $2.800.000": 1,
+    "$2.800.000 – $5.700.000": 2,
+    "$5.700.000 – $11.400.000": 3,
+    "más de $11.400.000": 4,
+}
 
-    Se reutiliza `rango_salario` de prep.py a proposito: es la MISMA funcion con
-    la que se calculo `salario_objetivo` de cada proyecto. Reimplementar las
-    bandas aqui las desalinearia del catalogo en cuanto una cambie.
-    """
+
+def _banda_salario(senal: SenalBowl) -> int:
+    """Traduce el rango de ingreso del formulario al codigo 1..4 del motor."""
+    etiqueta = (senal.ingresos_hogar_rango or "").strip().lower()
+    banda = BANDAS_POR_ETIQUETA.get(etiqueta)
+    if banda is not None:
+        return banda
+
+    # Texto libre o de un formulario futuro: se cae a la division por el SMMLV
+    # DEL MOTOR, que es con el que se calculo el salario_objetivo de cada
+    # proyecto. Usar el de Parametros pondria al lead en otra escala que el
+    # catalogo y cambiaria las recomendaciones sin que nada falle.
     ingreso = parsear_ingreso_mensual(senal.ingresos_hogar_rango)
-    return rango_salario(ingreso / Parametros.SMMLV)
+    return rango_salario(ingreso / SMMLV_MOTOR)
 
 
 def _a_entrada_motor(senal: SenalBowl) -> tuple[dict, dict]:
