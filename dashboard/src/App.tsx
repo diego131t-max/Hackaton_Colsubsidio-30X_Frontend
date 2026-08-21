@@ -46,20 +46,55 @@ export function App() {
     return desuscribir;
   }, []);
 
-  // Polling de plugins + tick de reloj para refrescar tiempos relativos.
+  // Tick de reloj: solo refresca los tiempos relativos ("hace 5 min"). Es
+  // local, no cuesta red, así que puede ir rápido.
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Estado de los plugins. Cada comprobación son TRES peticiones (dos a
+  // Supabase y un ping a /health), así que el intervalo importa: estaba en 2
+  // segundos, o sea ~90 peticiones por minuto por pestaña abierta. Eso disparó
+  // el rate-limit de Cloudflare delante de Render y dejó la API inalcanzable
+  // desde la red que estuviera mirando el panel.
+  //
+  // 30 segundos basta de sobra: es un semáforo de integraciones, no un dato
+  // que cambie por segundo. Los leads siguen llegando en vivo por Realtime,
+  // que es una suscripción y no hace polling.
   useEffect(() => {
     let vivo = true;
+    let enVuelo = false;
     const cargar = async () => {
-      const p = await dataSource.obtenerEstadoPlugins();
-      if (vivo) setPlugins(p);
-      setTick((t) => t + 1);
+      // Sin este guardia, una comprobación lenta se solapa con la siguiente y
+      // se acumulan peticiones abortadas — que es justo lo que se veía.
+      if (enVuelo) return;
+      enVuelo = true;
+      try {
+        const p = await dataSource.obtenerEstadoPlugins();
+        if (vivo) setPlugins(p);
+      } finally {
+        enVuelo = false;
+      }
     };
     cargar();
-    const t = setInterval(cargar, 2000);
+    const t = setInterval(cargar, 30000);
     return () => {
       vivo = false;
       clearInterval(t);
     };
+  }, []);
+
+  // Con la pestaña en segundo plano no hay nadie mirando: se deja de sondear.
+  // Una pestaña olvidada durante horas era, ella sola, miles de peticiones.
+  useEffect(() => {
+    const alCambiar = () => {
+      if (document.visibilityState === "visible") {
+        dataSource.obtenerEstadoPlugins().then(setPlugins).catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", alCambiar);
+    return () => document.removeEventListener("visibilitychange", alCambiar);
   }, []);
 
   // El monitor es oscuro y la ficha del asesor clara: se alterna la clase en
