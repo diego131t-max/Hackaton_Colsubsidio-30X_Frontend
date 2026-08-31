@@ -1,6 +1,14 @@
 # Render Blueprint — despliega el backend FastAPI como Web Service.
 # Cómo usar: en Render -> New -> Blueprint, conecta este repo. Render lee este
 # archivo. Luego define las env vars marcadas sync:false en el dashboard.
+#
+# POR QUE ESTAN TODAS DECLARADAS, INCLUSO LAS APAGADAS
+# Este archivo se habia quedado con 5 de las 18 variables que el codigo lee.
+# Como config.py les da valor por defecto, un despliegue limpio NO fallaba:
+# arrancaba, respondia /health, aceptaba leads... y no llamaba a nadie, porque
+# DAPTA_LLAMADAS_ACTIVAS no existia. Ese es el peor modo de fallo posible.
+# Declararlas todas convierte el blueprint en la lista de lo que hay que
+# configurar, aunque el valor lo ponga una persona en el panel.
 services:
   - type: web
     name: reto-vivienda-backend
@@ -13,14 +21,54 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.6"
-      # Secretos: se definen en el dashboard de Render (NO se versionan).
-      - key: DAPTA_FLOW_STUDIO_WEBHOOK_URL
-        sync: false
-      - key: DAPTA_WEBHOOK_SECRET
-        sync: false
+
+      # --- Supabase (obligatorio: sin esto no se persiste nada) -------------
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
         sync: false
+
+      # --- Frontend autorizado para CORS ------------------------------------
       - key: FRONTEND_ORIGIN
+        sync: false
+
+      # --- Dapta: disparo de llamadas ---------------------------------------
+      # El interruptor maestro. En false el lead se registra y NO se llama.
+      - key: DAPTA_LLAMADAS_ACTIVAS
+        value: "false"
+      # Un webhook por perfil. Con el flow enrutador los dos apuntan al mismo
+      # sitio y la decision la toma el flow. Llevan el x-api-key en la URL.
+      - key: DAPTA_FLOW_WEBHOOK_AFILIADO
+        sync: false
+      - key: DAPTA_FLOW_WEBHOOK_NO_AFILIADO
+        sync: false
+      # Compatibilidad hacia atras: si las dos de arriba faltan, se usa esta.
+      - key: DAPTA_FLOW_STUDIO_WEBHOOK_URL
+        sync: false
+      # Autentica el webhook post-call. Vacio = se acepta sin firma.
+      - key: DAPTA_WEBHOOK_SECRET
+        sync: false
+
+      # --- Seguimiento por WhatsApp (esperando la linea de Meta) ------------
+      - key: DAPTA_WHATSAPP_ACTIVO
+        value: "false"
+      - key: DAPTA_WHATSAPP_URL
+        sync: false
+      - key: DAPTA_WHATSAPP_API_KEY
+        sync: false
+      - key: DAPTA_WHATSAPP_AGENT_KEY
+        sync: false
+
+      # --- Seguimiento por CORREO (alternativa disponible hoy) --------------
+      - key: CORREO_ACTIVO
+        value: "false"
+      - key: CORREO_REMITENTE
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PUERTO
+        value: "587"
+      - key: SMTP_USUARIO
+        sync: false
+      - key: SMTP_CLAVE
         sync: false
