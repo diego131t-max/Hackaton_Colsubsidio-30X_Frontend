@@ -65,6 +65,20 @@ def normalizar_telefono_e164(raw: str | None, indicativo: str = "57") -> str | N
     return None
 
 
+def _entorno_legible(valor: Any) -> str | None:
+    """['zona bbq', 'piscina'] -> "zona bbq y piscina"."""
+    if valor is None:
+        return None
+    if isinstance(valor, str):
+        return valor
+    partes = [str(x).strip() for x in valor if str(x).strip()]
+    if not partes:
+        return None
+    if len(partes) == 1:
+        return partes[0]
+    return ", ".join(partes[:-1]) + " y " + partes[-1]
+
+
 def es_movil_colombiano(raw: str | None) -> bool:
     """Azucar para validar sin quedarse con el resultado."""
     return normalizar_telefono_e164(raw) is not None
@@ -147,7 +161,11 @@ async def disparar_llamada(
         "zona_interes": senal.zona_interes,
         "urgencia": urgencia,
         "edad": senal.edad,
-        "entorno_deseado": senal.entorno_deseado,
+        # En texto natural, no como lista de Python. El formulario lo manda como
+        # array y hasta ahora viajaba crudo: en la llamada real llego como
+        # ["zona bbq","piscina"] — con corchetes y comillas. Si el agente lo
+        # menciona, los pronuncia.
+        "entorno_deseado": _entorno_legible(senal.entorno_deseado),
         "personas_a_cargo": senal.personas_a_cargo,
         "piso_preferido": senal.piso_preferido,
         "tipo_inmueble": senal.tipo_inmueble,
